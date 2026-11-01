@@ -14,6 +14,8 @@ const TEMPLATES = {
     visual: '',
     ability: '',
     limit: '',
+    abilityReflects: '',
+    limitChoice: '',
     growth: [],
     emotion: '',
     vo: null,

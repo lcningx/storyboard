@@ -25,6 +25,8 @@ function baseFiles() {
       visual: '红马甲',
       ability: '能做到',
       limit: '不能做到',
+      abilityReflects: '倔强的性格',
+      limitChoice: '用了就会暴露身份',
       growth: ['A', 'B'],
       emotion: '倔强',
       vo: '吐槽',
@@ -373,6 +375,53 @@ test('I202 全集没有可切片高光', (t) => {
   assertHas(t, 'I202', (files) => {
     files['episodes/ep01.json'].highlights[0].clip = false;
   });
+});
+
+function addFight(files, id, t, fightType) {
+  const hl = { id, t, type: '打斗', name: id, summary: '打一场', setups: ['ep01.su1'] };
+  if (fightType) hl.fightType = fightType;
+  files['episodes/ep01.json'].highlights.unshift(hl);
+}
+
+test('W116 一集里有两场以上死斗', (t) => {
+  const result = assertHas(t, 'W116', (files) => {
+    addFight(files, 'ep01.hl2', '0:20', '死斗');
+    addFight(files, 'ep01.hl3', '0:15', '死斗');
+  });
+  assert.equal(result.issues.filter((i) => i.code === 'W116').length, 1);
+});
+
+test('W116 只有一场死斗不报', (t) => {
+  const { codes } = run((files) => {
+    addFight(files, 'ep01.hl2', '0:20', '死斗');
+    addFight(files, 'ep01.hl3', '0:15', '亮相');
+  }, t);
+  assert.ok(!codes.includes('W116'));
+});
+
+test('I203 核心角色没写能力里写着什么或限制逼他做什么选择', (t) => {
+  const result = assertHas(t, 'I203', (files) => {
+    delete files['characters/hero.json'].limitChoice;
+  });
+  const issue = result.issues.find((i) => i.code === 'I203');
+  assert.equal(issue.target, 'char.hero');
+  assert.ok(issue.message.includes('限制逼他做什么选择'));
+  assert.ok(!result.issues.some((i) => i.code === 'I203' && i.target === 'char.guest'));
+});
+
+test('I204 打斗高光没有标 fightType', (t) => {
+  const result = assertHas(t, 'I204', (files) => {
+    addFight(files, 'ep01.hl2', '0:20');
+  });
+  assert.equal(result.issues.find((i) => i.code === 'I204').target, 'ep01.hl2');
+});
+
+test('W113 fightType 和 fightEnding 的枚举', (t) => {
+  const result = assertHas(t, 'W113', (files) => {
+    addFight(files, 'ep01.hl2', '0:20', '乱打');
+    files['episodes/ep01.json'].highlights[0].fightEnding = '平局';
+  });
+  assert.equal(result.issues.filter((i) => i.code === 'W113').length, 2);
 });
 
 test('E900 JSON 解析失败时包含文件路径和原因', (t) => {

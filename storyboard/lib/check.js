@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W115、I201–I202。
+// 检查规则：E001–E006、W101–W116、I201–I204。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -7,6 +7,8 @@ const LEVEL_RANK = { error: 0, warn: 1, info: 2 };
 export const ENUMS = {
   beatType: ['钩子', '钩子升级', '教规则', '第一回合', '压', '爆', '余波', '连接'],
   highlightType: ['打斗', '亮相', '反转', '金句', '笑点', '情绪'],
+  fightType: ['亮相', '切磋', '教学', '压制', '规则', '团战', '死斗'],
+  fightEnding: ['打赢', '打输', '打平', '打出关系', '送别'],
   setupKind: ['规则', '压', '在乎', '伏笔'],
   eventKind: ['露面', '展开', '出场', '支援', '退场', '返场', '推进', '揭示'],
   layer: ['核心', '单元'],
@@ -112,6 +114,10 @@ export function checkProject(project) {
         for (const [f, label] of [['visual', '视觉标签'], ['ability', '能力'], ['limit', '限制'], ['growth', '变强方式']]) {
           require(d, target, f, label);
         }
+      }
+      if (d.layer === '核心') {
+        const missing = [['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+        if (missing.length) add('I203', 'info', target, `核心角色没有写：${missing.join('、')}`);
       }
       if (d.layer === '单元') {
         require(d, target, 'unit', '所属单元');
@@ -433,6 +439,18 @@ export function checkProject(project) {
     if (!highlights.some((h) => h?.clip === true)) {
       add('I202', 'info', epTarget, '全集没有 clip: true 的高光（没有可单独传播的片段）', { ep: ep.id });
     }
+
+    // W116 / I204 打斗类型
+    const fights = highlights.filter((h) => h?.type === '打斗');
+    const deathMatches = fights.filter((h) => h?.fightType === '死斗');
+    if (deathMatches.length >= 2) {
+      add('W116', 'warn', epTarget, `本集有 ${deathMatches.length} 场死斗（不要每场都打成死斗）：${deathMatches.map((h) => h.id).join('、')}`, { ep: ep.id });
+    }
+    for (const hl of fights) {
+      if (!filled(hl?.fightType)) {
+        add('I204', 'info', hl?.id || epTarget, `打斗高光「${hl?.name || hl?.id}」没有标 fightType（这场仗的任务）`, { ep: ep.id, from: hl?.t, to: hl?.t });
+      }
+    }
   }
 
   // ---- W103 / W104 / W114 铺垫 ----
@@ -557,6 +575,8 @@ export function checkProject(project) {
       for (const hl of arr(d.highlights)) {
         enumCheck(hl?.id || target, 'highlights.type', hl?.type, ENUMS.highlightType, d.id, hl?.t);
         enumCheck(hl?.id || target, 'highlights.growth', hl?.growth, ENUMS.growth, d.id, hl?.t);
+        enumCheck(hl?.id || target, 'highlights.fightType', hl?.fightType, ENUMS.fightType, d.id, hl?.t);
+        enumCheck(hl?.id || target, 'highlights.fightEnding', hl?.fightEnding, ENUMS.fightEnding, d.id, hl?.t);
       }
       for (const su of arr(d.setups)) enumCheck(su?.id || target, 'setups.kind', su?.kind, ENUMS.setupKind, d.id, su?.t);
       for (const ev of arr(d.events)) {
