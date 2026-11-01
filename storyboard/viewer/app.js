@@ -191,12 +191,8 @@ function dot(color) {
 // ---------- 数据与 hash ----------
 
 async function loadData() {
-  if (!state.project) {
-    const projects = await (await fetch('/api/projects')).json();
-    state.project = projects[0]?.slug || null;
-  }
   const res = await fetch(`/api/project?project=${encodeURIComponent(state.project)}`);
-  if (!res.ok) throw new Error(`读取项目失败：${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`读取项目失败：${res.status}`), { status: res.status });
   state.data = await res.json();
   buildIndex();
   const bad = state.data.parseErrors || [];
@@ -1253,15 +1249,55 @@ function connect() {
   });
 }
 
+// ---------- 项目列表（/ 或不存在的 /<slug>） ----------
+
+async function renderProjects() {
+  document.body.classList.add('home-page');
+  $('#tabs').hidden = true;
+  $('#check-badge').hidden = true;
+  $('#project-name').textContent = '全部项目';
+  let projects;
+  try {
+    projects = await (await fetch('/api/projects')).json();
+  } catch (err) {
+    view.innerHTML = `<p class="error-text">读取项目列表失败：${esc(err.message)}</p>`;
+    return;
+  }
+  const missing = state.project && !projects.some((p) => p.slug === state.project);
+  if (missing) showBanner(`找不到项目 "${state.project}"，下面是现有的项目。`);
+  document.title = 'storyboard';
+  view.innerHTML = `
+    <div class="cards project-cards">
+      ${projects
+        .map(
+          (p) => `
+        <a class="card project-card" href="/${encodeURIComponent(p.slug)}" style="--c:var(--c-core)">
+          <header><h3>${esc(p.name)}</h3><code class="muted">/${esc(p.slug)}</code></header>
+          <p class="card-summary">${esc(p.summary || '')}</p>
+        </a>`,
+        )
+        .join('')}
+    </div>`;
+}
+
 async function init() {
+  if (!state.project) {
+    renderProjects();
+    return;
+  }
   bind();
   applyHash();
   try {
     await loadData();
   } catch (err) {
+    if (err.status === 404) {
+      renderProjects();
+      return;
+    }
     view.innerHTML = `<p class="error-text">读取失败：${esc(err.message)}</p>`;
     return;
   }
+  document.title = `${state.data.project?.name || state.data.slug} · storyboard`;
   if (state.view === 'episode' && !state.ep) state.ep = state.data.episodes[0]?.id || null;
   renderAll();
   connect();

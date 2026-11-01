@@ -45,7 +45,7 @@ node story.js <命令> [参数] [--project <slug>] [--json]
 其他命令：
 
 - `node story.js new <类型> <slug>`：按模板新建文件
-- `node story.js serve [--port 4173]`：启动本地只读网页 `http://127.0.0.1:4173`
+- `node story.js serve [--port 4173]`：启动只读网页，`/` 是项目列表，`/<slug>` 是某个项目（如 `http://<服务器IP>:4173/demo`）
 - 所有命令加 `--json` 输出合法 JSON，方便程序处理
 
 ## 新建条目

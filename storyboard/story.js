@@ -17,7 +17,8 @@ const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--js
   check [<集ID或条目ID>] [--level error|warn|info]
                                         运行检查规则（--level 只显示不低于该级别的问题）
   new <类型> <slug>                     按模板新建条目（character/world/thread/unit/episode）
-  serve [--port 4173] [--host 0.0.0.0]  启动只读网页（默认监听所有网卡；--host 127.0.0.1 只允许本机）
+  serve [--port 4173] [--host 0.0.0.0]  启动只读网页，/ 是项目列表，/<slug> 是某个项目
+                                        （默认监听所有网卡；--host 127.0.0.1 只允许本机）
 
 时间格式为 m:ss。"--json" 输出结构化数据。`;
 
@@ -73,7 +74,7 @@ async function main() {
       throw new UserError(`端口不合法：${flags.port}`);
     }
     const { startServer } = await import('./lib/server.js');
-    await startServer({ slug: flags.project, port, host: flags.host || '0.0.0.0' });
+    await startServer({ port, host: flags.host || '0.0.0.0' });
     return;
   }
 

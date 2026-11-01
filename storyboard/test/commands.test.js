@@ -7,8 +7,10 @@ import { ROOT, PROJECTS_DIR } from '../lib/load.js';
 
 const STORY = path.join(ROOT, 'story.js');
 
+// projects/ 下可能有多个项目，测试一律显式指定示例项目
 function run(args) {
-  return execFileSync(process.execPath, [STORY, ...args], { cwd: ROOT, encoding: 'utf8' });
+  const withProject = args.includes('--project') ? args : [...args, '--project', 'demo'];
+  return execFileSync(process.execPath, [STORY, ...withProject], { cwd: ROOT, encoding: 'utf8' });
 }
 
 function runJson(args) {
@@ -93,7 +95,7 @@ test('check：示例项目无错误，按集过滤', () => {
 });
 
 test('找不到条目时退出码为 2', () => {
-  const result = spawnSync(process.execPath, [STORY, 'show', 'char.nope'], { cwd: ROOT, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [STORY, 'show', 'char.nope', '--project', 'demo'], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /找不到条目/);
 });

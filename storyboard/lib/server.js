@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { ROOT, PROJECTS_DIR, loadProject, loadProjectDir, resolveProjectSlug, listProjects, buildRefs } from './load.js';
+import { ROOT, loadProject, loadProjectDir, listProjects, buildRefs, UserError } from './load.js';
 import { checkProject } from './check.js';
 
 const MIME = {
@@ -55,10 +55,19 @@ function lanAddresses() {
     .map((a) => a.address);
 }
 
-export function startServer({ slug, port = 4173, host = '0.0.0.0' } = {}) {
-  const resolved = resolveProjectSlug(slug);
-  const projectDir = path.join(PROJECTS_DIR, resolved);
+// 网址：/ 是项目列表，/<slug> 是某个项目的查看器；hash 里记视图和集。
+export function startServer({ port = 4173, host = '0.0.0.0' } = {}) {
+  if (listProjects().length === 0) throw new UserError('没有找到项目：projects/ 下没有子目录');
   const viewerDir = path.join(ROOT, 'viewer');
+
+  const sendViewer = (res, status, slug) => {
+    try {
+      const html = fs.readFileSync(path.join(viewerDir, 'index.html'), 'utf8');
+      return sendText(res, status, html.replace('"__PROJECT__"', JSON.stringify(slug)), MIME['.html']);
+    } catch (err) {
+      return sendText(res, 500, `viewer/index.html 读取失败：${err.message}`);
+    }
+  };
 
   const server = http.createServer((req, res) => {
     let url;
@@ -72,15 +81,7 @@ export function startServer({ slug, port = 4173, host = '0.0.0.0' } = {}) {
       return sendText(res, 405, 'method not allowed');
     }
 
-    if (url.pathname === '/') {
-      try {
-        const html = fs.readFileSync(path.join(viewerDir, 'index.html'), 'utf8');
-        const injected = html.replace('"__PROJECT__"', JSON.stringify(resolved));
-        return sendText(res, 200, injected, MIME['.html']);
-      } catch (err) {
-        return sendText(res, 500, `viewer/index.html 读取失败：${err.message}`);
-      }
-    }
+    if (url.pathname === '/') return sendViewer(res, 200, null);
 
     if (url.pathname.startsWith('/viewer/')) {
       let rel;
@@ -110,7 +111,8 @@ export function startServer({ slug, port = 4173, host = '0.0.0.0' } = {}) {
     }
 
     if (url.pathname === '/api/project') {
-      const requested = url.searchParams.get('project') || resolved;
+      const requested = url.searchParams.get('project');
+      if (!requested) return sendJson(res, 400, { error: '缺少 project 参数' });
       try {
         const project = loadProject(requested);
         return sendJson(res, 200, projectPayload(project));
@@ -121,7 +123,21 @@ export function startServer({ slug, port = 4173, host = '0.0.0.0' } = {}) {
     }
 
     if (url.pathname === '/api/stream') {
-      return openStream(req, res, url.searchParams.get('project') || resolved);
+      if (!url.searchParams.get('project')) return sendJson(res, 400, { error: '缺少 project 参数' });
+      return openStream(req, res, url.searchParams.get('project'));
+    }
+
+    // /<slug> 或 /<slug>/：不认识的项目也返回查看器，由网页显示项目列表和提示
+    const m = url.pathname.match(/^\/([^/]+)\/?$/);
+    if (m && !url.pathname.startsWith('/api/')) {
+      let slug;
+      try {
+        slug = decodeURIComponent(m[1]);
+      } catch {
+        return sendText(res, 400, 'bad request');
+      }
+      const known = listProjects().some((p) => p.slug === slug);
+      return sendViewer(res, known ? 200 : 404, slug);
     }
 
     return sendText(res, 404, 'not found');
@@ -198,7 +214,9 @@ export function startServer({ slug, port = 4173, host = '0.0.0.0' } = {}) {
     server.listen(port, host, () => {
       server.off('error', onError);
       const hosts = host === '0.0.0.0' ? ['127.0.0.1', ...lanAddresses()] : [host];
-      console.log(`storyboard: ${hosts.map((h) => `http://${h}:${port}`).join('  ')}  （监听 ${host}，项目 ${resolved}，Ctrl+C 退出）`);
+      const slugs = listProjects().map((p) => `/${encodeURIComponent(p.slug)}`);
+      console.log(`storyboard: ${hosts.map((h) => `http://${h}:${port}`).join('  ')}  （监听 ${host}，Ctrl+C 退出）`);
+      console.log(`项目：${slugs.join('  ')}`);
       resolve(server);
     });
   });
