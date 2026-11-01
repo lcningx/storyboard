@@ -1,0 +1,57 @@
+{
+  "id": "ep01",
+  "no": 1,
+  "name": "撑伞",
+  "summary": "下着雨的女孩走进便利店，雨跟着她进了门",
+  "duration": "5:00",
+  "unit": "unit.rain-girl",
+  "hook": "零点，门外暴雨如注，雨水却整整齐齐停在自动门那条线上；一个浑身湿透的女孩站在门口",
+  "endHook": "雨娘：“他以前也给我撑伞。他也穿这件马甲。”",
+  "beats": [
+    { "type": "钩子", "from": "0:00", "to": "0:05" },
+    { "type": "钩子升级", "from": "0:05", "to": "0:30", "label": "雨跟着她进了店" },
+    { "type": "教规则", "from": "0:30", "to": "1:20", "label": "三块五一根" },
+    { "type": "第一回合", "from": "1:20", "to": "2:30", "label": "价签被雨浇灭" },
+    { "type": "压", "from": "2:30", "to": "3:30", "label": "被冲出店门" },
+    { "type": "爆", "from": "3:30", "to": "4:30", "label": "撑伞" },
+    { "type": "余波", "from": "4:30", "to": "5:00" }
+  ],
+  "setups": [
+    { "id": "ep01.su1", "t": "0:40", "kind": "规则", "name": "扫码定住", "summary": "偷香肠的小妖被收银枪扫中，一动也不能动" },
+    { "id": "ep01.su2", "t": "1:50", "kind": "规则", "name": "撑伞雨停", "summary": "雨娘看着破伞：“只要有人给我撑伞，雨就会停。”" },
+    { "id": "ep01.su3", "t": "2:45", "kind": "在乎", "name": "他会来接我", "summary": "雨娘：“他说过，下雨天会来接我。”" },
+    { "id": "ep01.su4", "t": "3:05", "kind": "压", "name": "门外无能", "summary": "苏棠被水冲出店门，在门外扣扳机只有空响" },
+    { "id": "ep01.su5", "t": "0:20", "kind": "伏笔", "longTerm": true, "name": "收购意向书", "summary": "门上贴着一张“永夜连锁收购意向书”，没人在意" }
+  ],
+  "highlights": [
+    { "id": "ep01.hl1", "t": "0:45", "type": "笑点", "name": "三块五一根", "summary": "苏棠：“三块五，扫码还是现金？”小妖举着香肠僵在原地", "clip": true, "setups": ["ep01.su1"], "refs": ["char.su-tang", "world.price-tag"] },
+    { "id": "ep01.hl2", "t": "1:35", "type": "反转", "name": "价签被浇灭", "summary": "苏棠扫向那场雨，价签刚弹出来就被雨浇灭、烧成灰", "setups": ["ep01.su1"], "refs": ["world.price-tag"] },
+    { "id": "ep01.hl3", "t": "2:15", "type": "亮相", "name": "黄头盔", "summary": "一个黄头盔骑手穿过暴雨，雨水在他车头一寸外自动分开", "noSetupReason": "露面式亮相，故意不解释", "refs": ["char.jiang-ye"] },
+    { "id": "ep01.hl4", "t": "3:55", "type": "情绪", "name": "撑伞", "summary": "江野准时把伞送到，苏棠冲回店里给雨娘撑开：雨停了，满店悬着的雨滴同时落地", "climax": true, "growth": "C", "clip": true, "setups": ["ep01.su2", "ep01.su3", "ep01.su4"], "refs": ["char.su-tang", "char.jiang-ye", "char.yu-niang"], "notes": [{ "date": "2026-10-31", "what": "第 1 集的爆点用情绪（C），不用打斗", "why": "雨娘不是坏人，打赢她不爽；撑伞这个动作同时兑现了规则、压和在乎三个铺垫" }] },
+    { "id": "ep01.hl5", "t": "4:40", "type": "金句", "name": "伞钱先记账", "summary": "苏棠：“伞钱十五，先记你账上。”", "noSetupReason": "收尾的人设金句", "refs": ["char.su-tang"] }
+  ],
+  "events": [
+    { "id": "ep01.ev1", "t": "0:00", "ref": "char.yu-niang", "kind": "出场", "summary": "雨停在门口，女孩站在雨里" },
+    { "id": "ep01.ev2", "t": "0:05", "ref": "char.su-tang", "kind": "出场", "summary": "收银台后抬起头的红马甲" },
+    { "id": "ep01.ev3", "t": "0:20", "ref": "thread.yong-ye", "kind": "推进", "summary": "门上的收购意向书一闪而过", "channel": "物件", "infoGap": "观众>角色" },
+    { "id": "ep01.ev4", "t": "0:40", "ref": "world.price-tag", "kind": "揭示", "summary": "第一次看到标价：扫中就动不了", "channel": "打斗", "infoGap": "观众=角色" },
+    { "id": "ep01.ev5", "t": "0:50", "ref": "thread.rent", "kind": "推进", "summary": "定格在扫码的瞬间，VO：“夜班一晚三十，房租还差两千四。”", "channel": "VO定格" },
+    { "id": "ep01.ev6", "t": "1:05", "ref": "world.midnight", "kind": "揭示", "summary": "排队的狐狸客人嘟囔：“零点以后的规矩，新来的不懂？”", "channel": "路人", "infoGap": "观众=角色" },
+    { "id": "ep01.ev7", "t": "2:15", "ref": "char.jiang-ye", "kind": "露面", "summary": "黄头盔骑手看了店一眼，开走了", "infoGap": "观众<角色" },
+    { "id": "ep01.ev8", "t": "3:20", "ref": "char.jiang-ye", "kind": "展开", "summary": "苏棠下单“五分钟送一把伞到店里”，黄头盔原地掉头" },
+    { "id": "ep01.ev9", "t": "4:45", "ref": "thread.lao-zhou", "kind": "推进", "summary": "雨娘说她等的人也穿这件马甲", "channel": "对白", "infoGap": "观众=角色" },
+    { "id": "ep01.ev10", "t": "4:50", "ref": "world.the-store", "kind": "揭示", "layer": 1, "summary": "雨娘付了一枚旧硬币，收银机认了", "channel": "物件", "infoGap": "观众=角色" }
+  ],
+  "emotion": [
+    { "t": "0:00", "v": 6 }, { "t": "0:05", "v": 7 }, { "t": "0:30", "v": 5 },
+    { "t": "0:45", "v": 6, "label": "笑" }, { "t": "1:20", "v": 5 }, { "t": "1:35", "v": 7 },
+    { "t": "2:00", "v": 6 }, { "t": "2:30", "v": 4 }, { "t": "2:45", "v": 3, "label": "心酸" },
+    { "t": "3:05", "v": 2, "label": "最低点" }, { "t": "3:20", "v": 4 }, { "t": "3:45", "v": 5, "label": "安静一拍" },
+    { "t": "3:55", "v": 10, "label": "燃" }, { "t": "4:30", "v": 6 }, { "t": "4:45", "v": 7 }, { "t": "5:00", "v": 5 }
+  ],
+  "grid": [
+    { "t": "2:05", "new": "店里的水漫过脚踝，货架开始往外漂" },
+    { "t": "4:05", "new": "江野不摘头盔，把伞往柜台上一放：“准时。给个五星。”" },
+    { "t": "4:20", "new": "雨滴落完，店里干了，只有雨娘脚下还有一小滩水" }
+  ]
+}

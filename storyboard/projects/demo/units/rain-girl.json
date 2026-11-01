@@ -1,0 +1,13 @@
+{
+  "id": "unit.rain-girl",
+  "name": "雨娘",
+  "summary": "一个下着雨的女孩每晚来店里等人",
+  "episodes": ["ep01", "ep02"],
+  "emotion": "同情：等人的心酸",
+  "legacy": [
+    { "kind": "角色得到", "desc": "苏棠学会给看不见的东西标价（等待）", "ref": "world.price-tag" },
+    { "kind": "关系变化", "desc": "苏棠和江野第一次合作：她下单，他送达", "ref": "char.jiang-ye" },
+    { "kind": "遗留问题", "desc": "雨娘等的人叫老周，也穿过这件红马甲", "ref": "thread.lao-zhou" },
+    { "kind": "世界变化", "desc": "苏棠知道了店本身就是一个地址", "ref": "world.the-store" }
+  ]
+}

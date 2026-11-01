@@ -1,0 +1,14 @@
+{
+  "name": "storyboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "短剧剧本结构工具：零依赖 CLI + 只读查看器",
+  "bin": {
+    "story": "./story.js"
+  },
+  "scripts": {
+    "check": "node story.js check",
+    "test": "node --test"
+  }
+}

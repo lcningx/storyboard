@@ -1,0 +1,12 @@
+{
+  "id": "unit.shadow-thief",
+  "name": "影贼",
+  "summary": "偷影子的贼盯上了苏棠",
+  "episodes": ["ep03"],
+  "emotion": "愤怒转爽：欺负打工人的人被反向收费",
+  "legacy": [
+    { "kind": "世界变化", "desc": "永夜连锁第一次露出真面目", "ref": "thread.yong-ye" },
+    { "kind": "世界变化", "desc": "苏棠知道自己是第七任夜班", "ref": "world.the-store" },
+    { "kind": "遗留问题", "desc": "监控角落里出现了老周的背影，苏棠没注意到", "ref": "char.lao-zhou" }
+  ]
+}

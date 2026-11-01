@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>storyboard</title>
+  <link rel="stylesheet" href="/viewer/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <h1 id="project-name">storyboard</h1>
+      <span id="project-summary" class="muted"></span>
+    </div>
+    <nav id="tabs" aria-label="视图">
+      <button class="tab" data-view="season">全季</button>
+      <button class="tab" data-view="episode">单集</button>
+      <button class="tab" data-view="library">资料</button>
+    </nav>
+    <button id="check-badge" class="badge ok" title="检查结果">检查中…</button>
+  </header>
+
+  <div id="issue-panel" class="issue-panel" hidden></div>
+  <div id="banner" class="banner" hidden></div>
+
+  <main id="view"></main>
+
+  <aside id="detail" class="detail" hidden>
+    <button class="detail-close" data-close="1" title="关闭（Esc）">×</button>
+    <div id="detail-body"></div>
+  </aside>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script>window.__PROJECT__ = "__PROJECT__";</script>
+  <script type="module" src="/viewer/app.js"></script>
+</body>
+</html>
