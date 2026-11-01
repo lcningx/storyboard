@@ -82,7 +82,8 @@ test('timeline 两种形态', () => {
 test('check：示例项目无错误，按集过滤', () => {
   const result = runJson(['check']);
   assert.equal(result.counts.error, 0);
-  assert.equal(result.counts.warn, 2);
+  assert.equal(result.counts.warn, 3);
+  assert.ok(result.issues.some((i) => i.code === 'W117' && i.ep === 'ep02'));
 
   const ep2 = runJson(['check', 'ep02']);
   assert.ok(ep2.issues.some((i) => i.code === 'W101' && i.ep === 'ep02'));

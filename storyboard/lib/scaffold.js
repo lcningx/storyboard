@@ -16,6 +16,7 @@ const TEMPLATES = {
     limit: '',
     abilityReflects: '',
     limitChoice: '',
+    anchors: '',
     growth: [],
     emotion: '',
     vo: null,
@@ -42,6 +43,8 @@ const TEMPLATES = {
     summary: '',
     episodes: [],
     emotion: '',
+    question: '',
+    anchor: '',
     legacy: [],
   }),
   episode: (id) => ({

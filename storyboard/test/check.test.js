@@ -16,6 +16,7 @@ function baseFiles() {
       gridSeconds: 10,
       maxEpisodeDuration: '10:00',
       climaxRange: [0.7, 0.85],
+      coreQuestion: '人能不能自己成为光？',
     },
     'characters/hero.json': {
       id: 'char.hero',
@@ -27,6 +28,7 @@ function baseFiles() {
       limit: '不能做到',
       abilityReflects: '倔强的性格',
       limitChoice: '用了就会暴露身份',
+      anchors: '开小店的母亲；小时候的同学',
       growth: ['A', 'B'],
       emotion: '倔强',
       vo: '吐槽',
@@ -40,6 +42,8 @@ function baseFiles() {
       layer: '单元',
       unit: 'unit.one',
       fate: '返场',
+      want: '想再见母亲一面',
+      exit: '化成一场雨，落在母亲的院子里',
       visual: '湿透',
       ability: '下雨',
       limit: '撑伞就停',
@@ -75,6 +79,8 @@ function baseFiles() {
       summary: '单元一句话',
       episodes: ['ep01'],
       emotion: '同情',
+      question: '没说出口的道歉还算不算数？',
+      anchor: 'char.hero',
       legacy: [{ kind: '角色得到', desc: '学到东西', ref: 'char.hero' }],
     },
     'episodes/ep01.json': {
@@ -96,7 +102,7 @@ function baseFiles() {
         {
           id: 'ep01.hl1',
           t: '0:45',
-          type: '情绪',
+          type: '亮相',
           name: '爆点',
           summary: '高光一句话',
           climax: true,
@@ -452,4 +458,78 @@ test('check --level 与 scope 过滤', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('I205 没有写全剧核心问题', (t) => {
+  const result = assertHas(t, 'I205', (files) => {
+    delete files['project.json'].coreQuestion;
+  });
+  assert.equal(result.issues.find((i) => i.code === 'I205').level, 'info');
+});
+
+test('I203 核心角色没写身边能引出单元的人和处境', (t) => {
+  const result = assertHas(t, 'I203', (files) => {
+    delete files['characters/hero.json'].anchors;
+  });
+  assert.ok(result.issues.find((i) => i.code === 'I203').message.includes('身边能引出单元的人和处境'));
+});
+
+test('I206 单元没写主题问题或挂靠的核心角色', (t) => {
+  const result = assertHas(t, 'I206', (files) => {
+    delete files['units/one.json'].question;
+    delete files['units/one.json'].anchor;
+  });
+  const issue = result.issues.find((i) => i.code === 'I206');
+  assert.equal(issue.target, 'unit.one');
+  assert.ok(issue.message.includes('主题问题') && issue.message.includes('挂在哪个核心角色身上'));
+});
+
+test('E001 单元的 anchor 引用了不存在的角色', (t) => {
+  assertHas(t, 'E001', (files) => {
+    files['units/one.json'].anchor = 'char.nope';
+  });
+});
+
+test('I207 单元角色没写一个想要或退场的去处', (t) => {
+  const result = assertHas(t, 'I207', (files) => {
+    delete files['characters/guest.json'].exit;
+  });
+  const issue = result.issues.find((i) => i.code === 'I207');
+  assert.equal(issue.target, 'char.guest');
+  assert.ok(issue.message.includes('退场的去处'));
+});
+
+test('I208 有核心角色没有当过任何单元的 anchor', (t) => {
+  const result = assertHas(t, 'I208', (files) => {
+    files['characters/mate.json'] = {
+      ...cloneJson(files['characters/hero.json']),
+      id: 'char.mate',
+      name: '伙伴',
+      relations: [],
+    };
+    files['units/two.json'] = { ...cloneJson(files['units/one.json']), id: 'unit.two', name: '单元二', episodes: [] };
+  });
+  assert.equal(result.issues.find((i) => i.code === 'I208').target, 'char.mate');
+});
+
+test('I208 挂靠的单元还少于核心角色数时不报', (t) => {
+  const { codes } = run((files) => {
+    files['characters/mate.json'] = { ...cloneJson(files['characters/hero.json']), id: 'char.mate', name: '伙伴', relations: [] };
+  }, t);
+  assert.ok(!codes.includes('I208'));
+});
+
+test('W117 前 3 集没有打斗或亮相高光', (t) => {
+  const result = assertHas(t, 'W117', (files) => {
+    files['episodes/ep01.json'].highlights[0].type = '情绪';
+  });
+  assert.equal(result.issues.find((i) => i.code === 'W117').target, 'ep01');
+});
+
+test('W117 第 4 集以后不报', (t) => {
+  const { codes } = run((files) => {
+    files['episodes/ep01.json'].highlights[0].type = '情绪';
+    files['episodes/ep01.json'].no = 4;
+  }, t);
+  assert.ok(!codes.includes('W117'));
 });

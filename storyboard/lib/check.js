@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W116、I201–I204。
+// 检查规则：E001–E006、W101–W117、I201–I208。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -101,6 +101,9 @@ export function checkProject(project) {
       add('E003', 'error', meta.id || 'project.json', `maxEpisodeDuration 时间格式错误：${meta.maxEpisodeDuration}`);
     }
   }
+  if (project.project && !filled(meta.coreQuestion)) {
+    add('I205', 'info', meta.id || 'project.json', '没有写 coreQuestion（全剧核心问题：大结局要回答的那一个问题）');
+  }
 
   for (const entry of project.entries) {
     const d = entry.data;
@@ -116,12 +119,14 @@ export function checkProject(project) {
         }
       }
       if (d.layer === '核心') {
-        const missing = [['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+        const missing = [['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择'], ['anchors', '身边能引出单元的人和处境']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
         if (missing.length) add('I203', 'info', target, `核心角色没有写：${missing.join('、')}`);
       }
       if (d.layer === '单元') {
         require(d, target, 'unit', '所属单元');
         require(d, target, 'fate', '单元结束后去向');
+        const missing = [['want', '一个想要'], ['exit', '退场的去处']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+        if (missing.length) add('I207', 'info', target, `单元角色没有写：${missing.join('、')}`);
       }
     } else if (entry.type === 'world') {
       require(d, target, 'id');
@@ -144,6 +149,8 @@ export function checkProject(project) {
       require(d, target, 'episodes', '包含的集');
       require(d, target, 'emotion', '核心情绪');
       require(d, target, 'legacy', '留下的东西');
+      const missing = [['question', '主题问题'], ['anchor', '挂在哪个核心角色身上']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+      if (missing.length) add('I206', 'info', target, `单元没有写：${missing.join('、')}`);
     } else if (entry.type === 'episode') {
       for (const [f, label] of [
         ['id', 'id'], ['name', '名字'], ['summary', '一句话'], ['no', '集号'], ['duration', '时长'],
@@ -191,6 +198,7 @@ export function checkProject(project) {
     } else if (entry.type === 'unit') {
       for (const id of arr(d.episodes)) refCheck(target, id, 'episodes', ['episode']);
       for (const item of arr(d.legacy)) refCheck(target, item?.ref, 'legacy.ref');
+      refCheck(target, d.anchor, 'anchor', ['character']);
     } else if (entry.type === 'episode') {
       refCheck(target, d.unit, 'unit', ['unit']);
       for (const hl of arr(d.highlights)) {
@@ -526,6 +534,30 @@ export function checkProject(project) {
     }
     if (pts.length > 0 && maxPos - pts[pts.length - 1] > maxGap) {
       add('W106', 'warn', target, `贯穿线「${d.name || d.id}」最后 ${maxPos - pts[pts.length - 1]} 集没有推进（最多 ${maxGap} 集）`);
+    }
+  }
+
+  // ---- W117 前 3 集没有打斗或亮相 ----
+  for (const ep of project.episodes) {
+    const no = Number(ep.no);
+    if (!Number.isFinite(no) || no > 3) continue;
+    if (!arr(ep.highlights).some((h) => h?.type === '打斗' || h?.type === '亮相')) {
+      add('W117', 'warn', ep.id || 'episode', `第 ${no} 集没有打斗或亮相高光（试播集和前几集不要让打斗退后，观众还不认识任何人）`, { ep: ep.id });
+    }
+  }
+
+  // ---- I208 核心角色轮流当情绪中心 ----
+  {
+    const units = project.entries.filter((e) => e.type === 'unit');
+    const anchored = new Set(units.map((e) => e.data.anchor).filter((a) => typeof a === 'string' && a));
+    const cores = project.entries.filter((e) => e.type === 'character' && e.data.layer === '核心');
+    const anchoredUnits = units.filter((e) => filled(e.data.anchor)).length;
+    if (anchoredUnits >= cores.length && cores.length > 0) {
+      for (const c of cores) {
+        if (!anchored.has(c.data.id)) {
+          add('I208', 'info', targetOf(c), `核心角色「${c.data.name || c.data.id}」还没有当过任何单元的 anchor（核心角色要轮流当情绪中心）`);
+        }
+      }
     }
   }
 
