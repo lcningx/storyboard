@@ -586,6 +586,10 @@ test('I211 主角没有秘密时不报', (t) => {
   assert.ok(!codes.includes('I211'));
 });
 
-test('I212 连续 3 个单元"谁变了"都是主角', (t) => {
-  assertHas(t, 'I212', (files) => addUnits(files, 3, { changes: 'char.hero' }));
+test('I210 主角没有秘密时不报', (t) => {
+  const { codes } = run((files) => {
+    delete files['characters/hero.json'].secret;
+    delete files['characters/hero.json'].ritual;
+  }, t);
+  assert.ok(!codes.includes('I210'));
 });

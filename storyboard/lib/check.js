@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I212。
+// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I211（I212 已删除）。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -102,7 +102,7 @@ export function checkProject(project) {
     add('I205', 'info', meta.id || 'project.json', '没有写 coreQuestion（全剧核心问题：大结局要回答的那一个问题）');
   }
   if (project.project) {
-    const missing = [['protagonist', '主角'], ['ensemble', '群像']].filter(([f]) => !filled(meta[f])).map(([, label]) => label);
+    const missing = [['protagonist', '主角'], ['ensemble', '团队']].filter(([f]) => !filled(meta[f])).map(([, label]) => label);
     if (missing.length) add('I209', 'info', meta.id || 'project.json', `项目没有写：${missing.join('、')}`);
   }
 
@@ -123,9 +123,9 @@ export function checkProject(project) {
         const missing = [['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择'], ['anchors', '身边能引出单元的人和处境']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
         if (missing.length) add('I203', 'info', target, `核心角色没有写：${missing.join('、')}`);
       }
-      if (project.project && d.id === meta.protagonist) {
-        const missing = [['secret', '秘密'], ['ritual', '固定动作'], ['mirror', '镜像'], ['circle', '知情圈']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
-        if (missing.length) add('I210', 'info', target, `主角没有写：${missing.join('、')}（没有秘密的主角可以忽略）`);
+      if (project.project && d.id === meta.protagonist && filled(d.secret)) {
+        const missing = [['ritual', '固定动作'], ['mirror', '镜像'], ['circle', '知情圈']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+        if (missing.length) add('I210', 'info', target, `主角写了秘密，但没有写：${missing.join('、')}`);
       }
       if (d.layer === '单元') {
         require(d, target, 'unit', '所属单元');
@@ -566,7 +566,7 @@ export function checkProject(project) {
     }
   }
 
-  // ---- I211 知情圈太久没动 / I212 谁变了一直是主角 ----
+  // ---- I211 主角有秘密时，知情圈太久没动 ----
   if (project.project && filled(meta.protagonist)) {
     const firstNo = (u) => {
       const nos = arr(u.data.episodes).map((id) => Number(index.get(id)?.data?.no)).filter(Number.isFinite);
@@ -590,11 +590,8 @@ export function checkProject(project) {
     const hero = index.get(meta.protagonist);
     if (hero?.type === 'character' && filled(hero.data.secret)) {
       for (const run of streaks((u) => !filled(u.data.reveal))) {
-        add('I211', 'info', targetOf(run[run.length - 1]), `连续 ${run.length} 个单元知情圈没有动：${names(run)}（主角的弧线是知情圈在扩大）`);
+        add('I211', 'info', targetOf(run[run.length - 1]), `连续 ${run.length} 个单元知情圈没有动：${names(run)}（主角有秘密时，知情圈扩大是他变的一条路）`);
       }
-    }
-    for (const run of streaks((u) => u.data.changes === meta.protagonist)) {
-      add('I212', 'info', targetOf(run[run.length - 1]), `连续 ${run.length} 个单元"谁变了"都是主角：${names(run)}（"变"的位置要轮给别人）`);
     }
   }
 
