@@ -16,6 +16,8 @@ function baseFiles() {
       gridSeconds: 10,
       climaxRange: [0.7, 0.85],
       coreQuestion: '人能不能自己成为光？',
+      protagonist: 'char.hero',
+      ensemble: ['单元角色：变'],
     },
     'characters/hero.json': {
       id: 'char.hero',
@@ -33,6 +35,9 @@ function baseFiles() {
       vo: '吐槽',
       relations: [{ to: 'char.guest', kind: '互补', desc: '搭档' }],
       secret: '作者知道的事',
+      ritual: '每次出手都可能暴露身份',
+      mirror: '同样力量的另一个人',
+      circle: [{ who: 'char.guest', desc: '第一个单元知道一半' }],
     },
     'characters/guest.json': {
       id: 'char.guest',
@@ -80,6 +85,8 @@ function baseFiles() {
       emotion: '同情',
       question: '没说出口的道歉还算不算数？',
       anchor: 'char.hero',
+      changes: 'char.guest',
+      reveal: '单元角色撞见主角出手',
       legacy: [{ kind: '角色得到', desc: '学到东西', ref: 'char.hero' }],
     },
     'episodes/ep01.json': {
@@ -525,4 +532,60 @@ test('W117 第 4 集以后不报', (t) => {
     files['episodes/ep01.json'].no = 4;
   }, t);
   assert.ok(!codes.includes('W117'));
+});
+
+test('I209 项目没有写主角和群像', (t) => {
+  assertHas(t, 'I209', (files) => {
+    delete files['project.json'].protagonist;
+  });
+});
+
+test('E001 protagonist 指向不存在的角色', (t) => {
+  assertHas(t, 'E001', (files) => {
+    files['project.json'].protagonist = 'char.nobody';
+  });
+});
+
+test('I210 主角没有写固定动作', (t) => {
+  const result = assertHas(t, 'I210', (files) => {
+    delete files['characters/hero.json'].ritual;
+  });
+  assert.equal(result.issues.find((i) => i.code === 'I210').target, 'char.hero');
+});
+
+test('E001 mirror 写成角色 ID 时要存在，写描述不报', (t) => {
+  assertHas(t, 'E001', (files) => {
+    files['characters/hero.json'].mirror = 'char.nobody';
+  });
+  const { codes } = run((files) => {
+    files['characters/hero.json'].mirror = '走了另一条路的师兄';
+  }, t);
+  assert.ok(!codes.includes('E001'));
+});
+
+function addUnits(files, n, patch = {}) {
+  for (let i = 2; i < 2 + n; i++) {
+    files[`units/u${i}.json`] = { ...cloneJson(files['units/one.json']), id: `unit.u${i}`, name: `单元${i}`, episodes: [], ...patch };
+  }
+}
+
+test('I211 连续 3 个单元知情圈没有动', (t) => {
+  assertHas(t, 'I211', (files) => addUnits(files, 3, { reveal: '' }));
+});
+
+test('I211 只有 2 个单元没动时不报', (t) => {
+  const { codes } = run((files) => addUnits(files, 2, { reveal: '' }), t);
+  assert.ok(!codes.includes('I211'));
+});
+
+test('I211 主角没有秘密时不报', (t) => {
+  const { codes } = run((files) => {
+    delete files['characters/hero.json'].secret;
+    addUnits(files, 3, { reveal: '' });
+  }, t);
+  assert.ok(!codes.includes('I211'));
+});
+
+test('I212 连续 3 个单元"谁变了"都是主角', (t) => {
+  assertHas(t, 'I212', (files) => addUnits(files, 3, { changes: 'char.hero' }));
 });

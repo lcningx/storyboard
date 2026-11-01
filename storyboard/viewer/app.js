@@ -953,10 +953,10 @@ function renderLibrary() {
 // ---------- 详情面板 ----------
 
 const DETAIL_FIELDS = {
-  character: [['layer', '层级'], ['visual', '视觉'], ['ability', '能力'], ['limit', '限制'], ['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择'], ['anchors', '身边能引出单元的人和处境'], ['growth', '变强方式'], ['emotion', '情绪'], ['vo', 'VO'], ['unit', '所属单元'], ['want', '一个想要'], ['fate', '单元结束后去向'], ['exit', '退场的去处'], ['relations', '关系'], ['secret', '秘密']],
+  character: [['layer', '层级'], ['visual', '视觉'], ['ability', '能力'], ['limit', '限制'], ['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择'], ['anchors', '身边能引出单元的人和处境'], ['growth', '变强方式'], ['emotion', '情绪'], ['vo', 'VO'], ['unit', '所属单元'], ['want', '一个想要'], ['fate', '单元结束后去向'], ['exit', '退场的去处'], ['relations', '关系'], ['secret', '秘密'], ['ritual', '固定动作'], ['mirror', '镜像'], ['circle', '知情圈']],
   world: [['kind', '类型'], ['truth', '完整设定'], ['layers', '揭开层次']],
   thread: [['kind', '类型'], ['question', '让人惦记的问题'], ['ending', '结局'], ['maxGap', '最多连续不推进']],
-  unit: [['episodes', '包含的集'], ['emotion', '核心情绪'], ['question', '主题问题'], ['anchor', '挂在哪个核心角色身上'], ['legacy', '留下的东西']],
+  unit: [['episodes', '包含的集'], ['emotion', '核心情绪'], ['question', '主题问题'], ['anchor', '挂在哪个核心角色身上'], ['changes', '谁变了'], ['reveal', '知情圈怎么动'], ['legacy', '留下的东西']],
   episode: [['no', '集号'], ['duration', '时长'], ['unit', '所属单元'], ['hook', '钩子'], ['endHook', '结尾钩子']],
   highlight: [['t', '时间'], ['type', '类型'], ['climax', '情绪爆点'], ['fightType', '打斗类型'], ['fightEnding', '打斗结局'], ['line', '高潮台词'], ['growth', '变强方式'], ['clip', '可切片'], ['setups', '铺垫'], ['noSetupReason', '无铺垫原因'], ['refs', '涉及']],
   setup: [['t', '时间'], ['kind', '类型'], ['longTerm', '长线伏笔']],
@@ -972,7 +972,7 @@ function formatValue(key, value) {
   if (value === undefined || value === null || value === '') return '—';
   if (typeof value === 'boolean') return value ? '是' : '否';
   if (typeof value === 'string') {
-    if (['unit', 'ref', 'to', 'anchor'].includes(key) && index.has(value)) return linkId(value);
+    if (['unit', 'ref', 'to', 'anchor', 'mirror', 'changes'].includes(key) && index.has(value)) return linkId(value);
     return esc(value);
   }
   if (Array.isArray(value)) {
@@ -986,6 +986,9 @@ function formatValue(key, value) {
     }
     if (key === 'legacy') {
       return `<ul class="legacy">${value.map((x) => `<li>${esc(x.kind)}：${esc(x.desc)}${x.ref ? ` ${linkId(x.ref)}` : ''}</li>`).join('')}</ul>`;
+    }
+    if (key === 'circle') {
+      return value.map((c) => `<div>${c?.who && index.has(c.who) ? linkId(c.who) : esc(c?.who || '')}：<span class="muted">${esc(c?.desc || '')}</span></div>`).join('');
     }
     if (key === 'layers') {
       return value.map((l) => `<div>第 ${l.no} 层：${esc(l.desc)}</div>`).join('');

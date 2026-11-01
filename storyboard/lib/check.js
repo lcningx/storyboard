@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I208。
+// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I212。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -101,6 +101,10 @@ export function checkProject(project) {
   if (project.project && !filled(meta.coreQuestion)) {
     add('I205', 'info', meta.id || 'project.json', '没有写 coreQuestion（全剧核心问题：大结局要回答的那一个问题）');
   }
+  if (project.project) {
+    const missing = [['protagonist', '主角'], ['ensemble', '群像']].filter(([f]) => !filled(meta[f])).map(([, label]) => label);
+    if (missing.length) add('I209', 'info', meta.id || 'project.json', `项目没有写：${missing.join('、')}`);
+  }
 
   for (const entry of project.entries) {
     const d = entry.data;
@@ -118,6 +122,10 @@ export function checkProject(project) {
       if (d.layer === '核心') {
         const missing = [['abilityReflects', '能力里写着什么'], ['limitChoice', '限制逼他做什么选择'], ['anchors', '身边能引出单元的人和处境']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
         if (missing.length) add('I203', 'info', target, `核心角色没有写：${missing.join('、')}`);
+      }
+      if (project.project && d.id === meta.protagonist) {
+        const missing = [['secret', '秘密'], ['ritual', '固定动作'], ['mirror', '镜像'], ['circle', '知情圈']].filter(([f]) => !filled(d[f])).map(([, label]) => label);
+        if (missing.length) add('I210', 'info', target, `主角没有写：${missing.join('、')}（没有秘密的主角可以忽略）`);
       }
       if (d.layer === '单元') {
         require(d, target, 'unit', '所属单元');
@@ -186,16 +194,24 @@ export function checkProject(project) {
       add('E001', 'error', target, `引用了类型不对的 ID：${ref}（${field}）`);
     }
   };
+  // 可以写角色 ID，也可以写一句描述：只有看起来像角色 ID 时才检查
+  const charRefCheck = (target, ref, field) => {
+    if (typeof ref === 'string' && ref.startsWith('char.')) refCheck(target, ref, field, ['character']);
+  };
+  if (project.project) refCheck(meta.id || 'project.json', meta.protagonist, 'protagonist', ['character']);
   for (const entry of project.entries) {
     const d = entry.data;
     const target = targetOf(entry);
     if (entry.type === 'character') {
       refCheck(target, d.unit, 'unit', ['unit']);
       for (const rel of arr(d.relations)) refCheck(target, rel?.to, 'relations.to', ['character']);
+      charRefCheck(target, d.mirror, 'mirror');
+      for (const c of arr(d.circle)) charRefCheck(target, c?.who, 'circle.who');
     } else if (entry.type === 'unit') {
       for (const id of arr(d.episodes)) refCheck(target, id, 'episodes', ['episode']);
       for (const item of arr(d.legacy)) refCheck(target, item?.ref, 'legacy.ref');
       refCheck(target, d.anchor, 'anchor', ['character']);
+      charRefCheck(target, d.changes, 'changes');
     } else if (entry.type === 'episode') {
       refCheck(target, d.unit, 'unit', ['unit']);
       for (const hl of arr(d.highlights)) {
@@ -547,6 +563,38 @@ export function checkProject(project) {
           add('I208', 'info', targetOf(c), `核心角色「${c.data.name || c.data.id}」还没有当过任何单元的 anchor（核心角色要轮流当情绪中心）`);
         }
       }
+    }
+  }
+
+  // ---- I211 知情圈太久没动 / I212 谁变了一直是主角 ----
+  if (project.project && filled(meta.protagonist)) {
+    const firstNo = (u) => {
+      const nos = arr(u.data.episodes).map((id) => Number(index.get(id)?.data?.no)).filter(Number.isFinite);
+      return nos.length ? Math.min(...nos) : Infinity;
+    };
+    const ordered = project.entries.filter((e) => e.type === 'unit').sort((a, b) => firstNo(a) - firstNo(b));
+    const streaks = (test) => {
+      const out = [];
+      let run = [];
+      for (const u of ordered) {
+        if (test(u)) run.push(u);
+        else {
+          if (run.length >= 3) out.push(run);
+          run = [];
+        }
+      }
+      if (run.length >= 3) out.push(run);
+      return out;
+    };
+    const names = (run) => run.map((u) => u.data.name || u.data.id).join('、');
+    const hero = index.get(meta.protagonist);
+    if (hero?.type === 'character' && filled(hero.data.secret)) {
+      for (const run of streaks((u) => !filled(u.data.reveal))) {
+        add('I211', 'info', targetOf(run[run.length - 1]), `连续 ${run.length} 个单元知情圈没有动：${names(run)}（主角的弧线是知情圈在扩大）`);
+      }
+    }
+    for (const run of streaks((u) => u.data.changes === meta.protagonist)) {
+      add('I212', 'info', targetOf(run[run.length - 1]), `连续 ${run.length} 个单元"谁变了"都是主角：${names(run)}（"变"的位置要轮给别人）`);
     }
   }
 

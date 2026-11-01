@@ -45,6 +45,8 @@ const TEMPLATES = {
     emotion: '',
     question: '',
     anchor: '',
+    changes: '',
+    reveal: '',
     legacy: [],
   }),
   episode: (id) => ({
