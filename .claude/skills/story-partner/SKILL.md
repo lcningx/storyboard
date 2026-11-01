@@ -14,7 +14,7 @@ description: 编剧搭档模式：和用户一起从零搭建一部短剧（单�
 
 ## 必读材料
 
-- 方法论：[短剧爆款剧本框架.md](../../../短剧爆款剧本框架.md)。讨论时的所有判断都以它为依据。不要一次全读：开始一个阶段时，只读这个阶段对应的那几节（见 [references/stages.md](references/stages.md)）。
+- 方法论：[短剧爆款剧本框架.md](../../../docs/短剧爆款剧本框架.md)。讨论时的所有判断都以它为依据。不要一次全读：开始一个阶段时，只读这个阶段对应的那几节（见 [references/stages.md](references/stages.md)）。
 - 数据格式：[storyboard/技术方案.md](../../../storyboard/技术方案.md) 第 5 节。
 - 各阶段怎么做：[references/stages.md](references/stages.md)
 - 怎么读写数据：[references/data-ops.md](references/data-ops.md)。**第一次写数据之前必须读。**
