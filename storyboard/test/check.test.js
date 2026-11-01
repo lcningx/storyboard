@@ -14,7 +14,6 @@ function baseFiles() {
       summary: '一句话',
       skeleton: ['步骤一', '步骤二'],
       gridSeconds: 10,
-      maxEpisodeDuration: '10:00',
       climaxRange: [0.7, 0.85],
       coreQuestion: '人能不能自己成为光？',
     },
@@ -314,12 +313,6 @@ test('W110 相邻高光间隔超过 2 分钟', (t) => {
       { type: '余波', from: '4:50', to: '5:00' },
     ];
     ep.highlights.push({ id: 'ep01.hl2', t: '3:00', type: '金句', name: '第二高光', summary: '间隔太久', setups: ['ep01.su1'], clip: true });
-  });
-});
-
-test('W111 单集超过 maxEpisodeDuration', (t) => {
-  assertHas(t, 'W111', (files) => {
-    files['episodes/ep01.json'].duration = '11:00';
   });
 });
 

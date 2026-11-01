@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W117、I201–I208。
+// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I208。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -96,9 +96,6 @@ export function checkProject(project) {
   } else {
     for (const [f, label] of [['id', 'id'], ['name', '剧名'], ['summary', '一句话设想'], ['skeleton', '骨架公式']]) {
       require(meta, 'project.json', f, label);
-    }
-    if (meta.maxEpisodeDuration !== undefined && parseTime(meta.maxEpisodeDuration) === null) {
-      add('E003', 'error', meta.id || 'project.json', `maxEpisodeDuration 时间格式错误：${meta.maxEpisodeDuration}`);
     }
   }
   if (project.project && !filled(meta.coreQuestion)) {
@@ -373,14 +370,6 @@ export function checkProject(project) {
           `相邻高光间隔超过 2 分钟：${hlTimes[i - 1].h.t} 到 ${hlTimes[i].h.t}（${formatTime(gap)}）`,
           { ep: ep.id, from: formatTime(hlTimes[i - 1].t), to: hlTimes[i].h.t },
         );
-      }
-    }
-
-    // W111
-    if (duration !== null) {
-      const max = parseTime(meta.maxEpisodeDuration) ?? 600;
-      if (duration > max) {
-        add('W111', 'warn', epTarget, `单集时长超过上限：${ep.duration} > ${formatTime(max)}`, { ep: ep.id });
       }
     }
 
