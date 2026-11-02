@@ -39,6 +39,16 @@ function item(t, tag, text, priority = 5) {
 
 function epItems(ep) {
   const items = [];
+  for (const sc of Array.isArray(ep.scenes) ? ep.scenes : []) {
+    items.push(
+      item(
+        parseTime(sc?.from),
+        '场次',
+        `${sc.id} ${sc.from}–${sc.to} ${sc.place || ''}${sc.turn ? ` · 转：${sc.turn}` : ''}`,
+        0,
+      ),
+    );
+  }
   for (const b of Array.isArray(ep.beats) ? ep.beats : []) {
     const from = parseTime(b?.from);
     items.push(
@@ -141,7 +151,7 @@ export function cmdShow(project, ids) {
 
 // ---------- ep ----------
 
-const EP_FIELDS = ['beats', 'highlights', 'setups', 'events', 'emotion', 'grid'];
+const EP_FIELDS = ['beats', 'scenes', 'highlights', 'setups', 'events', 'emotion', 'grid'];
 
 function inRange(t, from, to) {
   return t !== null && (from === null || t >= from) && (to === null || t <= to);
@@ -178,7 +188,7 @@ export function cmdEp(project, epArg, { from, to, only } = {}) {
   for (const key of EP_FIELDS) {
     if (!want(key)) continue;
     const list = Array.isArray(ep[key]) ? ep[key] : [];
-    if (key === 'beats') {
+    if (key === 'beats' || key === 'scenes') {
       out[key] = list.filter((b) => {
         const bf = parseTime(b?.from);
         const bt = parseTime(b?.to);
@@ -199,6 +209,7 @@ export function cmdEp(project, epArg, { from, to, only } = {}) {
   if (out.hook !== undefined) lines.push(`钩子 ${out.hook}`);
   const tagKey = {
     节拍: 'beats',
+    场次: 'scenes',
     高光: 'highlights',
     铺垫: 'setups',
     事件: 'events',
@@ -207,14 +218,54 @@ export function cmdEp(project, epArg, { from, to, only } = {}) {
   };
   for (const it of epItems({ ...out })) {
     if (!want(tagKey[it.tag])) continue;
-    // 节拍在上面已经按区间重叠过滤过，其他条目按时间点过滤。
-    if (it.tag !== '节拍' && (fromSec !== null || toSec !== null)) {
+    // 节拍、场次在上面已经按区间重叠过滤过，其他条目按时间点过滤。
+    if (it.tag !== '节拍' && it.tag !== '场次' && (fromSec !== null || toSec !== null)) {
       if (it.t === null || it.t < (fromSec ?? -Infinity) || it.t > (toSec ?? Infinity)) continue;
     }
     lines.push(lineFor(it));
   }
   if (out.endHook !== undefined) lines.push(`结尾 ${out.endHook}`);
   return { data: out, text: lines.join('\n') };
+}
+
+// ---------- script ----------
+
+function whoName(project, who) {
+  if (typeof who !== 'string' || who === '') return '?';
+  return project.index.get(who)?.data?.name || who;
+}
+
+export function cmdScript(project, epArg, sceneId) {
+  const ep = findEpisode(project, epArg);
+  if (!ep) throw new UserError(`找不到集：${epArg}`);
+  const all = Array.isArray(ep.scenes) ? ep.scenes : [];
+  let scenes = all;
+  if (sceneId) {
+    scenes = all.filter((sc) => sc?.id === sceneId);
+    if (scenes.length === 0) throw new UserError(`${ep.id} 里没有场次：${sceneId}`);
+  }
+  const lines = [`${ep.id} ${ep.name || ''} · ${ep.duration || '?'}`];
+  if (all.length === 0) lines.push('（这一集还没有写场次）');
+  for (const sc of scenes) {
+    const no = all.indexOf(sc) + 1;
+    lines.push('', `第 ${no} 场  ${sc.id}  ${sc.from}–${sc.to}  ${sc.place || ''}`);
+    (Array.isArray(sc.wants) ? sc.wants : []).forEach((w, i) => {
+      lines.push(`${i === 0 ? '想要' : '    '}  ${whoName(project, w?.who)}：${w?.want || ''}`);
+    });
+    if (sc.turn) lines.push(`转    ${sc.turn}`);
+    for (const shot of Array.isArray(sc.shots) ? sc.shots : []) {
+      const head = [shot.size, shot.move].filter(Boolean).join('·');
+      const realizes = Array.isArray(shot.realizes) && shot.realizes.length ? `  [${shot.realizes.join(' ')}]` : '';
+      lines.push(`  ${shot.t}  【${head || '?'} ${shot.dur ?? '?'}秒】${shot.frame || ''}${realizes}`);
+      for (const line of Array.isArray(shot.lines) ? shot.lines : []) {
+        const kind = line?.kind && line.kind !== '对白' ? `（${line.kind}）` : '';
+        lines.push(`        ${kind}${whoName(project, line?.who)}：${line?.text || ''}`);
+      }
+      if (shot.sound) lines.push(`        ♪ ${shot.sound}`);
+    }
+    if (sc.next) lines.push(`→ 下一场  ${sc.next}`);
+  }
+  return { data: { id: ep.id, scenes }, text: lines.join('\n') };
 }
 
 // ---------- where ----------

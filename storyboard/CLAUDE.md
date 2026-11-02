@@ -30,6 +30,7 @@ node story.js <命令> [参数] [--project <slug>] [--json]
    - 某个角色/线/设定出现在哪：`node story.js where char.su-tang`
    - 一个高光的铺垫链：`node story.js chain ep01.hl4`
    - 全季概览：`node story.js timeline`
+   - 某一集或某一场的剧本（场次、想要、转折、镜头、台词）：`node story.js script ep01 [ep01.sc2]`
 3. **直接编辑对应的 JSON 文件**，不要通过网页改，也不要新建中间文件。
 4. **跑检查并修错误**：
    ```bash
@@ -95,6 +96,7 @@ node story.js check
 - 高光：本集必须**恰好一个** `climax: true`；没有铺垫时写 `noSetupReason`，否则报 W102。
 - 铺垫：被高光用 `setups` 引用；跨集长线伏笔标 `longTerm: true`，否则没人引用会报 W103/W114。
 - 事件：`kind: "揭示"` 且指向秘密类世界设定时，必须写 `layer`（对应 `layers.no`）。
+- 场次（`scenes`，选填）：每场写 `wants`（谁想要什么）、`turn`（怎么转）、`next`（接下一场的理由），场次覆盖全集；镜头写 `t`、`dur`、`size`、`frame`，台词放在镜头的 `lines` 里，`realizes` 标出它落实了本集哪个高光、铺垫或事件。画面用中文写看得见的东西，不写生成提示词。写了场次的集，每个高光和铺垫都要被某个镜头落实（W121）。
 
 完整字段表直接看 [技术方案.md](技术方案.md) 第 5 节，不要凭记忆猜字段。
 

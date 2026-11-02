@@ -25,6 +25,7 @@ export const TYPE_LABEL = {
   highlight: '高光',
   setup: '铺垫',
   event: '事件',
+  scene: '场次',
 };
 
 export const TYPE_ORDER = ['project', 'character', 'world', 'thread', 'unit', 'episode'];
@@ -33,6 +34,7 @@ const SUB_KEYS = [
   ['highlights', 'highlight'],
   ['setups', 'setup'],
   ['events', 'event'],
+  ['scenes', 'scene'],
 ];
 
 export class UserError extends Error {}
@@ -248,6 +250,24 @@ export function buildRefs(project) {
             label: hl.name || '',
             summary: hl.summary || '',
           });
+        }
+      }
+      for (const sc of Array.isArray(d.scenes) ? d.scenes : []) {
+        if (!sc || typeof sc !== 'object') continue;
+        const scRef = (target, kind, t, label) =>
+          add(target, { from: sc.id, fromType: 'scene', kind, ep: d.id, t, label, summary: sc.place || '' });
+        for (const w of Array.isArray(sc.wants) ? sc.wants : []) {
+          if (typeof w?.who === 'string' && w.who.startsWith('char.')) scRef(w.who, '场次：想要', sc.from, w.want || '');
+        }
+        for (const shot of Array.isArray(sc.shots) ? sc.shots : []) {
+          for (const line of Array.isArray(shot?.lines) ? shot.lines : []) {
+            if (typeof line?.who === 'string' && line.who.startsWith('char.')) {
+              scRef(line.who, line.kind === 'VO' ? '台词：VO' : '台词', shot.t, line.text || '');
+            }
+          }
+          for (const rid of Array.isArray(shot?.realizes) ? shot.realizes : []) {
+            scRef(rid, '镜头落实', shot.t, shot.frame || '');
+          }
         }
       }
       for (const ev of Array.isArray(d.events) ? d.events : []) {

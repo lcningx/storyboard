@@ -2,7 +2,7 @@
 // storyboard 唯一入口：CLI 命令 + serve。
 
 import { loadProject, UserError } from './lib/load.js';
-import { cmdIndex, cmdShow, cmdEp, cmdWhere, cmdChain, cmdTimeline, cmdCheck } from './lib/query.js';
+import { cmdIndex, cmdShow, cmdEp, cmdScript, cmdWhere, cmdChain, cmdTimeline, cmdCheck } from './lib/query.js';
 
 const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--json]
 
@@ -11,6 +11,7 @@ const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--js
   show <id> [<id>...]                   输出条目完整内容，集内条目也可直接查
   ep <集ID或集号> [--from <t>] [--to <t>] [--only <字段,...>]
                                         输出一集；可限定时间段和字段（如 --only highlights,setups）
+  script <集ID或集号> [<场次ID>]        按剧本格式输出一集或一场：场次、想要、转折、镜头和台词
   where <id>                            某个条目在哪些集、什么时间被引用
   chain <高光ID>                        高光的铺垫链，标注所在集和相隔多久
   timeline [<集ID>]                     全季概览；带集 ID 时输出该集按时间排好的条目
@@ -95,6 +96,10 @@ async function main() {
     case 'ep':
       if (!rest[0]) throw new UserError('ep 需要一个集 ID 或集号，例如 ep01');
       print(cmdEp(project, rest[0], flags), flags.json);
+      break;
+    case 'script':
+      if (!rest[0]) throw new UserError('script 需要一个集 ID 或集号，例如 ep01');
+      print(cmdScript(project, rest[0], rest[1]), flags.json);
       break;
     case 'where':
       if (!rest[0]) throw new UserError('where 需要一个条目 ID');

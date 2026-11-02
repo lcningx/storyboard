@@ -1,4 +1,4 @@
-// 检查规则：E001–E006、W101–W117（W111 已删除）、I201–I211（I212 已删除）。
+// 检查规则：E001–E007、W101–W123（W111 已删除）、I201–I211（I212 已删除）。
 
 import { parseTime, formatTime } from './time.js';
 
@@ -20,7 +20,16 @@ export const ENUMS = {
   legacyKind: ['角色得到', '世界变化', '关系变化', '遗留问题'],
   infoGap: ['观众<角色', '观众=角色', '观众>角色'],
   channel: ['VO定格', '对白', '路人', '物件', '打斗'],
+  shotSize: ['远景', '全景', '中景', '近景', '特写'],
+  shotMove: ['固定', '推', '拉', '摇', '移', '跟', '升降', '手持', '主观'],
+  lineKind: ['对白', 'VO', '画外'],
 };
+
+// 台词按每秒约 4 个字估算（只数文字和数字，不数标点）
+export const CHARS_PER_SECOND = 4;
+export function spokenLength(text) {
+  return (String(text || '').match(/[\p{L}\p{N}]/gu) || []).length;
+}
 
 const arr = (v) => (Array.isArray(v) ? v : []);
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -221,6 +230,19 @@ export function checkProject(project) {
       for (const ev of arr(d.events)) {
         if (ev?.ref) refCheck(ev.id || target, ev.ref, 'events.ref', ['character', 'thread', 'world']);
       }
+      const own = new Set([...arr(d.highlights), ...arr(d.setups), ...arr(d.events)].map((x) => x?.id).filter(Boolean));
+      for (const sc of arr(d.scenes)) {
+        const scTarget = sc?.id || target;
+        for (const w of arr(sc?.wants)) charRefCheck(scTarget, w?.who, 'scenes.wants.who');
+        for (const shot of arr(sc?.shots)) {
+          for (const line of arr(shot?.lines)) charRefCheck(scTarget, line?.who, 'shots.lines.who');
+          for (const rid of arr(shot?.realizes)) {
+            if (typeof rid !== 'string' || rid === '') continue;
+            if (!exists(rid)) add('E001', 'error', scTarget, `引用了不存在的 ID：${rid}（shots.realizes）`);
+            else if (!own.has(rid)) add('E001', 'error', scTarget, `镜头只能落实本集的高光、铺垫或事件：${rid}（shots.realizes）`);
+          }
+        }
+      }
     }
   }
 
@@ -249,6 +271,11 @@ export function checkProject(project) {
     for (const ev of arr(ep.events)) timeCheck(ev?.t, duration, ev?.id || epTarget, 'event.t');
     for (const p of arr(ep.emotion)) timeCheck(p?.t, duration, epTarget, 'emotion.t');
     for (const g of arr(ep.grid)) timeCheck(g?.t, duration, epTarget, 'grid.t');
+    for (const sc of arr(ep.scenes)) {
+      timeCheck(sc?.from, duration, sc?.id || epTarget, 'scene.from');
+      timeCheck(sc?.to, duration, sc?.id || epTarget, 'scene.to');
+      for (const shot of arr(sc?.shots)) timeCheck(shot?.t, duration, sc?.id || epTarget, 'shot.t');
+    }
   }
 
   // ---- E005 节拍 ----
@@ -595,6 +622,98 @@ export function checkProject(project) {
     }
   }
 
+  // ---- E007 / W118–W123 场次和分镜 ----
+  // 核心角色在全剧第一次出场：最早的“露面/出场”事件，或者最早的一句台词
+  const firstAppear = new Map();
+  const earlier = (a, b) => !b || a.rank < b.rank || (a.rank === b.rank && a.t < b.t);
+  for (const ep of project.episodes) {
+    const rank = epOrder.get(ep.id) ?? 999;
+    const seen = (who, t) => {
+      if (typeof who !== 'string' || t === null) return;
+      const cand = { ep, rank, t };
+      if (earlier(cand, firstAppear.get(who))) firstAppear.set(who, cand);
+    };
+    for (const ev of arr(ep.events)) if (['露面', '出场'].includes(ev?.kind)) seen(ev.ref, parseTime(ev.t));
+    for (const sc of arr(ep.scenes)) {
+      for (const shot of arr(sc?.shots)) for (const line of arr(shot?.lines)) seen(line?.who, parseTime(shot?.t));
+    }
+  }
+
+  for (const ep of project.episodes) {
+    const scenes = arr(ep.scenes);
+    if (scenes.length === 0) continue;
+    const epTarget = ep.id || 'episode';
+    const duration = parseTime(ep.duration);
+    const extra = (from, to) => ({ ep: ep.id, from: formatTime(from), to: formatTime(to ?? from) });
+    const timed = scenes
+      .map((sc) => ({ sc, from: parseTime(sc?.from), to: parseTime(sc?.to) }))
+      .filter((x) => x.from !== null && x.to !== null)
+      .sort((a, b) => a.from - b.from);
+
+    timed.forEach((cur, i) => {
+      const id = cur.sc.id || epTarget;
+      if (cur.to <= cur.from) add('E007', 'error', id, `场次结束时间不晚于开始：${formatTime(cur.from)}–${formatTime(cur.to)}`, extra(cur.from, cur.to));
+      const prev = timed[i - 1];
+      if (prev && cur.from < prev.to) {
+        add('E007', 'error', id, `场次重叠：${prev.sc.id} 和 ${cur.sc.id}`, extra(cur.from, prev.to));
+      } else if (prev && cur.from > prev.to) {
+        add('W123', 'warn', epTarget, `场次没有覆盖：${formatTime(prev.to)}–${formatTime(cur.from)} 之间没有场次`, extra(prev.to, cur.from));
+      }
+      if (!filled(cur.sc.turn)) add('W118', 'warn', id, `场次没有写 turn：这一场怎么转（没有转折的场就是水）`, extra(cur.from, cur.to));
+      if (i < timed.length - 1 && !filled(cur.sc.next)) {
+        add('W119', 'warn', id, `场次没有写 next：接下一场的理由（前后两场的因果断了）`, extra(cur.from, cur.to));
+      }
+
+      // 镜头：在场次之内、彼此不重叠；台词说不说得完
+      const shots = arr(cur.sc.shots)
+        .map((shot) => ({ shot, t: parseTime(shot?.t), dur: Number(shot?.dur) }))
+        .filter((x) => x.t !== null)
+        .sort((a, b) => a.t - b.t);
+      shots.forEach((x, j) => {
+        const end = Number.isFinite(x.dur) ? x.t + x.dur : x.t;
+        if (x.t < cur.from || end > cur.to) {
+          add('E007', 'error', id, `镜头 ${formatTime(x.t)} 不在场次 ${formatTime(cur.from)}–${formatTime(cur.to)} 之内`, extra(x.t, end));
+        }
+        const next = shots[j + 1];
+        if (next && Number.isFinite(x.dur) && next.t < end) {
+          add('E007', 'error', id, `镜头重叠：${formatTime(x.t)} 起 ${x.dur} 秒，和 ${formatTime(next.t)} 的镜头重叠`, extra(next.t, end));
+        }
+        const chars = arr(x.shot.lines).reduce((n, line) => n + spokenLength(line?.text), 0);
+        if (Number.isFinite(x.dur) && chars > x.dur * CHARS_PER_SECOND) {
+          add('W122', 'warn', id, `台词说不完：${formatTime(x.t)} 的镜头 ${x.dur} 秒，台词 ${chars} 个字（约需 ${Math.ceil(chars / CHARS_PER_SECOND)} 秒）`, extra(x.t, end));
+        }
+      });
+    });
+    if (timed.length) {
+      if (timed[0].from > 0) add('W123', 'warn', epTarget, `场次没有从 0:00 开始（从 ${formatTime(timed[0].from)} 开始）`, extra(0, timed[0].from));
+      const last = timed[timed.length - 1];
+      if (duration !== null && last.to < duration) {
+        add('W123', 'warn', epTarget, `场次没有覆盖到结尾：${formatTime(last.to)}–${formatTime(duration)}`, extra(last.to, duration));
+      }
+    }
+
+    // W121 高光、铺垫有没有被镜头落实
+    const realized = new Set();
+    for (const sc of scenes) for (const shot of arr(sc?.shots)) for (const rid of arr(shot?.realizes)) realized.add(rid);
+    for (const [list, label] of [[arr(ep.highlights), '高光'], [arr(ep.setups), '铺垫']]) {
+      for (const item of list) {
+        if (!item?.id || realized.has(item.id)) continue;
+        const t = parseTime(item.t);
+        add('W121', 'warn', item.id, `${label}「${item.name || item.id}」没有被任何镜头落实`, t === null ? { ep: ep.id } : extra(t));
+      }
+    }
+
+    // W120 核心角色第一次出场的那一场，wants 里没有他
+    for (const [who, first] of firstAppear) {
+      if (first.ep !== ep || index.get(who)?.data?.layer !== '核心') continue;
+      const hit = timed.find((x) => first.t >= x.from && first.t < x.to);
+      if (hit && !arr(hit.sc.wants).some((w) => w?.who === who)) {
+        const name = index.get(who).data.name || who;
+        add('W120', 'warn', hit.sc.id || epTarget, `「${name}」在全剧第一次出场的这一场，wants 里没有写他想要什么`, extra(first.t));
+      }
+    }
+  }
+
   // ---- W107 / W108 / W112 ----
   for (const entry of project.entries) {
     if (entry.type === 'unit') {
@@ -650,6 +769,13 @@ export function checkProject(project) {
         enumCheck(ev?.id || target, 'events.infoGap', ev?.infoGap, ENUMS.infoGap, d.id, ev?.t);
         enumCheck(ev?.id || target, 'events.channel', ev?.channel, ENUMS.channel, d.id, ev?.t);
       }
+      for (const sc of arr(d.scenes)) {
+        for (const shot of arr(sc?.shots)) {
+          enumCheck(sc?.id || target, 'shots.size', shot?.size, ENUMS.shotSize, d.id, shot?.t);
+          enumCheck(sc?.id || target, 'shots.move', shot?.move, ENUMS.shotMove, d.id, shot?.t);
+          for (const line of arr(shot?.lines)) enumCheck(sc?.id || target, 'lines.kind', line?.kind, ENUMS.lineKind, d.id, shot?.t);
+        }
+      }
     }
   }
 
@@ -685,6 +811,7 @@ export function checkProject(project) {
       for (const key of ['highlights', 'setups', 'events']) {
         for (const item of arr(d[key])) notesCheck(item?.id || targetOf(entry), item?.notes, d.id, item?.t);
       }
+      for (const sc of arr(d.scenes)) notesCheck(sc?.id || targetOf(entry), sc?.notes, d.id, sc?.from);
     }
   }
 

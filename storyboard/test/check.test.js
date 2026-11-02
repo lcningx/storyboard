@@ -593,3 +593,122 @@ test('I210 主角没有秘密时不报', (t) => {
   }, t);
   assert.ok(!codes.includes('I210'));
 });
+
+// ---- 场次和分镜 ----
+
+function withScenes(files) {
+  const ep = files['episodes/ep01.json'];
+  ep.scenes = [
+    {
+      id: 'ep01.sc1',
+      from: '0:00',
+      to: '0:30',
+      place: '街口 · 外 · 夜',
+      wants: [{ who: 'char.hero', want: '找到人' }],
+      turn: '他发现了规则',
+      next: '所以他追了上去',
+      shots: [
+        { t: '0:00', dur: 10, size: '全景', move: '推', frame: '街口', lines: [{ who: 'char.hero', text: '人呢？' }] },
+        { t: '0:10', dur: 20, size: '特写', frame: '地上的痕迹', realizes: ['ep01.su1'] },
+      ],
+    },
+    {
+      id: 'ep01.sc2',
+      from: '0:30',
+      to: '1:00',
+      place: '屋顶 · 外 · 夜',
+      wants: [{ who: 'char.guest', want: '再见母亲一面' }],
+      turn: '他出手了',
+      shots: [{ t: '0:30', dur: 30, size: '中景', frame: '屋顶上的对决', lines: [{ who: '路人', text: '快看！', kind: '画外' }], realizes: ['ep01.hl1'] }],
+    },
+  ];
+}
+
+test('合法的场次和分镜不报任何问题', (t) => {
+  const { result } = run(withScenes, t);
+  assert.deepEqual(result.counts, { error: 0, warn: 0, info: 0 }, result.issues.map((i) => `${i.code} ${i.message}`).join('\n'));
+});
+
+test('E007 场次重叠、镜头越出场次或彼此重叠', (t) => {
+  assertHas(t, 'E007', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[1].from = '0:20';
+  });
+  assertHas(t, 'E007', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[1].dur = 25;
+  });
+  assertHas(t, 'E007', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[0].dur = 15;
+  });
+});
+
+test('E001 镜头只能落实本集的条目，台词里的角色 ID 要存在', (t) => {
+  assertHas(t, 'E001', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[0].realizes = ['ep09.hl1'];
+  });
+  assertHas(t, 'E001', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[0].lines[0].who = 'char.nope';
+  });
+});
+
+test('W118 场次没有写 turn', (t) => {
+  assertHas(t, 'W118', (files) => {
+    withScenes(files);
+    delete files['episodes/ep01.json'].scenes[1].turn;
+  });
+});
+
+test('W119 场次没有写 next，最后一场不报', (t) => {
+  assertHas(t, 'W119', (files) => {
+    withScenes(files);
+    delete files['episodes/ep01.json'].scenes[0].next;
+  });
+  const { codes } = run(withScenes, t);
+  assert.ok(!codes.includes('W119'));
+});
+
+test('W120 核心角色第一次出场的那一场没写他想要什么', (t) => {
+  assertHas(t, 'W120', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].wants = [];
+  });
+});
+
+test('W121 高光或铺垫没有被镜头落实', (t) => {
+  assertHas(t, 'W121', (files) => {
+    withScenes(files);
+    delete files['episodes/ep01.json'].scenes[1].shots[0].realizes;
+  });
+});
+
+test('W121 没写场次的集不报', (t) => {
+  const { codes } = run(null, t);
+  assert.ok(!codes.includes('W121'));
+});
+
+test('W122 台词说不完', (t) => {
+  assertHas(t, 'W122', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[0].lines[0].text = '这一句台词非常非常长，长到十秒钟根本念不完，还在继续往下说，一直说一直说不停，说到天都黑了还没说完，旁边的人都睡着了';
+  });
+});
+
+test('W123 场次没有覆盖全集', (t) => {
+  assertHas(t, 'W123', (files) => {
+    withScenes(files);
+    const sc = files['episodes/ep01.json'].scenes[1];
+    sc.to = '0:50';
+    sc.shots[0].dur = 20;
+  });
+});
+
+test('W113 景别、运镜、台词类型的枚举', (t) => {
+  assertHas(t, 'W113', (files) => {
+    withScenes(files);
+    files['episodes/ep01.json'].scenes[0].shots[0].size = '大特写';
+  });
+});

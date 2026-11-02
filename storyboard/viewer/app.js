@@ -13,9 +13,11 @@ const state = {
   detail: null,
   selHl: null,
   data: null,
+  scriptPlain: false,
 };
 const index = new Map();
 const unitColor = new Map();
+const charColor = new Map();
 
 const TYPE_LABELS = {
   project: '项目',
@@ -27,6 +29,7 @@ const TYPE_LABELS = {
   highlight: '高光',
   setup: '铺垫',
   event: '事件',
+  scene: '场次',
 };
 
 // 颜色：每一类东西一套固定的颜色，在 style.css 里定义成变量
@@ -133,6 +136,8 @@ function buildIndex() {
   const d = state.data;
   if (!d) return;
   d.units.forEach((u, i) => unitColor.set(u.id, `var(--u${(i % 6) + 1})`));
+  charColor.clear();
+  d.characters.forEach((c, i) => charColor.set(c.id, `var(--p${(i % 8) + 1})`));
   for (const c of d.characters) index.set(c.id, { type: 'character', data: c });
   for (const w of d.world) index.set(w.id, { type: 'world', data: w });
   for (const t of d.threads) index.set(t.id, { type: 'thread', data: t });
@@ -142,6 +147,7 @@ function buildIndex() {
     for (const hl of arr(ep.highlights)) index.set(hl.id, { type: 'highlight', data: hl, ep });
     for (const su of arr(ep.setups)) index.set(su.id, { type: 'setup', data: su, ep });
     for (const ev of arr(ep.events)) index.set(ev.id, { type: 'event', data: ev, ep });
+    for (const sc of arr(ep.scenes)) index.set(sc.id, { type: 'scene', data: { ...sc, name: sc.place }, ep });
   }
 }
 
@@ -865,9 +871,109 @@ function renderEpisode() {
       <div class="panel-head"><h3>按时间顺序</h3><span class="hint">点任意一行看详情</span></div>
       <div class="list">${renderList(ep)}</div>
     </section>
+    ${renderBoard(ep)}
     ${legacy ? `<section class="panel"><div class="panel-head"><h3>本单元留下的东西</h3></div><ul class="legacy">${legacy}</ul></section>` : ''}`;
   const box = $('#timeline-box');
   box.innerHTML = renderTimeline(ep, Math.max(960, box.clientWidth));
+}
+
+// ---------- 分镜 ----------
+// 像翻漫画一样读：场次卡 + 一排漫画格；格子宽度按秒数缩放，台词是气泡，VO 是旁白框。
+
+const SIZE_CLASS = { 远景: 'far', 全景: 'full', 中景: 'mid', 近景: 'near', 特写: 'close' };
+const MOVE_ARROW = { 推: '→', 拉: '←', 摇: '↔', 移: '⇢', 跟: '⇉', 升降: '↕', 手持: '≈', 主观: '◉', 固定: '·' };
+
+function whoName(who) {
+  return getEntry(who)?.data.name || who || '?';
+}
+
+function whoColor(who) {
+  return charColor.get(who) || 'var(--muted)';
+}
+
+function emotionAt(ep, t) {
+  const pts = arr(ep.emotion).map((p) => ({ t: parseT(p.t), v: Number(p.v) })).filter((p) => p.t !== null).sort((a, b) => a.t - b.t);
+  if (!pts.length || t === null) return null;
+  if (t <= pts[0].t) return pts[0].v;
+  for (let i = 1; i < pts.length; i += 1) {
+    if (t <= pts[i].t) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      return a.v + ((b.v - a.v) * (t - a.t)) / Math.max(1, b.t - a.t);
+    }
+  }
+  return pts[pts.length - 1].v;
+}
+
+function shotPanel(ep, shot) {
+  const realized = arr(shot.realizes).map(getEntry).filter(Boolean);
+  const hls = realized.filter((e) => e.type === 'highlight');
+  const climax = hls.find((e) => e.data.climax);
+  const pinned = realized.some((e) => e.type === 'setup');
+  const dur = Number(shot.dur) || 3;
+  const width = Math.round(Math.min(440, Math.max(150, dur * 26)) * (climax ? 1.35 : 1));
+  const emo = emotionAt(ep, parseT(shot.t));
+  const lines = arr(shot.lines);
+  const vo = lines.filter((l) => l.kind === 'VO');
+  const spoken = lines.filter((l) => l.kind !== 'VO');
+  const goto = realized[0]?.data.id;
+  const star = hls.length
+    ? `<span class="shot-star" style="--c:${hlColor((climax || hls[0]).data)}">${climax ? '◆' : '★'} ${esc(hls.map((h) => h.data.name).join('、'))}</span>`
+    : '';
+  return `<div class="shot shot-${SIZE_CLASS[shot.size] || 'mid'}${climax ? ' shot-climax' : ''}" style="width:${width}px"${goto ? ` data-goto="${esc(goto)}"` : ''}>
+    <div class="shot-emo" title="情绪 ${emo === null ? '—' : emo.toFixed(1)}"><i style="width:${emo === null ? 0 : emo * 10}%"></i></div>
+    <div class="shot-frame">
+      <div class="shot-head"><b>${esc(shot.size || '?')}</b>${shot.move && shot.move !== '固定' ? `<span>${MOVE_ARROW[shot.move] || ''}${esc(shot.move)}</span>` : ''}${pinned ? '<span class="shot-pin" title="落实了铺垫">📌</span>' : ''}${star}</div>
+      ${vo.map((l) => `<div class="caption" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))} · VO</small>${esc(l.text)}</div>`).join('')}
+      <p class="shot-text">${esc(shot.frame || '')}</p>
+      ${spoken.map((l) => `<div class="bubble${l.kind === '画外' ? ' off' : ''}" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))}${l.kind === '画外' ? ' · 画外' : ''}</small>${esc(l.text)}</div>`).join('')}
+      ${shot.sound ? `<div class="shot-sound">♪ ${esc(shot.sound)}</div>` : ''}
+    </div>
+    <div class="shot-foot">${esc(shot.t || '')} · ${dur} 秒</div>
+  </div>`;
+}
+
+function plainScene(sc, no) {
+  const wants = arr(sc.wants).map((w) => `${esc(whoName(w.who))}：${esc(w.want)}`).join('<br>');
+  const shots = arr(sc.shots)
+    .map((shot) => {
+      const head = [shot.size, shot.move].filter(Boolean).join('·');
+      const lines = arr(shot.lines)
+        .map((l) => `<div class="pl-line"><b>${esc(whoName(l.who))}</b>${l.kind && l.kind !== '对白' ? `（${esc(l.kind)}）` : ''}：${esc(l.text)}</div>`)
+        .join('');
+      return `<div class="pl-shot"><span class="pl-t">${esc(shot.t)}</span><div><span class="pl-head">【${esc(head)} ${esc(String(shot.dur ?? '?'))}秒】</span>${esc(shot.frame || '')}${lines}${shot.sound ? `<div class="pl-line muted">♪ ${esc(shot.sound)}</div>` : ''}</div></div>`;
+    })
+    .join('');
+  return `<div class="pl-scene"><h4>第 ${no} 场　${esc(sc.place || '')} <span class="muted">${esc(sc.from)}–${esc(sc.to)}</span></h4>
+    ${wants ? `<p class="muted">想要：${wants}</p>` : ''}${sc.turn ? `<p class="muted">转：${esc(sc.turn)}</p>` : ''}
+    ${shots}${sc.next ? `<p class="muted">→ 下一场：${esc(sc.next)}</p>` : ''}</div>`;
+}
+
+function renderBoard(ep) {
+  const scenes = arr(ep.scenes);
+  if (!scenes.length) return '';
+  const toggle = `<button class="mini" data-scriptmode>${state.scriptPlain ? '看分镜' : '纯文本'}</button>`;
+  const body = scenes
+    .map((sc, i) => {
+      if (state.scriptPlain) return plainScene(sc, i + 1);
+      const issues = issuesFor(sc.id).filter((x) => x.level !== 'info').map((x) => `<div class="row-issue lvl-${x.level}">${esc(x.code)} ${esc(x.message)}</div>`).join('');
+      const wants = arr(sc.wants).map((w) => `<div class="want" style="--c:${whoColor(w.who)}"><b>${esc(whoName(w.who))}</b>${esc(w.want)}</div>`).join('');
+      return `<article class="scene">
+        <header class="scene-card" data-goto="${esc(sc.id)}">
+          <div class="scene-title"><span class="scene-no">第 ${i + 1} 场</span><b>${esc(sc.place || '')}</b><span class="muted">${esc(sc.from)}–${esc(sc.to)}</span></div>
+          ${wants ? `<div class="wants">${wants}</div>` : ''}
+          ${sc.turn ? `<div class="turn"><span>转</span>${esc(sc.turn)}</div>` : ''}
+          ${issues}
+        </header>
+        <div class="strip">${arr(sc.shots).map((shot) => shotPanel(ep, shot)).join('')}</div>
+        ${sc.next ? `<div class="next">→ 下一场：${esc(sc.next)}</div>` : ''}
+      </article>`;
+    })
+    .join('');
+  return `<section class="panel board">
+    <div class="panel-head"><h3>分镜</h3><span class="hint">像翻漫画一样读：气泡是台词，方框是 VO，★ 是高光，📌 是铺垫；点格子看它落实了什么</span>${toggle}</div>
+    ${body}
+  </section>`;
 }
 
 // ---------- 资料 ----------
@@ -961,6 +1067,7 @@ const DETAIL_FIELDS = {
   highlight: [['t', '时间'], ['type', '类型'], ['climax', '情绪爆点'], ['fightType', '打斗类型'], ['fightEnding', '打斗结局'], ['line', '高潮台词'], ['growth', '变强方式'], ['clip', '可切片'], ['setups', '铺垫'], ['noSetupReason', '无铺垫原因'], ['refs', '涉及']],
   setup: [['t', '时间'], ['kind', '类型'], ['longTerm', '长线伏笔']],
   event: [['t', '时间'], ['ref', '指向'], ['kind', '动作'], ['layer', '揭示层次'], ['infoGap', '信息差'], ['channel', '投放渠道']],
+  scene: [['from', '开始'], ['to', '结束'], ['wants', '谁想要什么'], ['turn', '怎么转'], ['next', '接下一场的理由']],
 };
 
 function linkId(id) {
@@ -989,6 +1096,9 @@ function formatValue(key, value) {
     }
     if (key === 'circle') {
       return value.map((c) => `<div>${c?.who && index.has(c.who) ? linkId(c.who) : esc(c?.who || '')}：<span class="muted">${esc(c?.desc || '')}</span></div>`).join('');
+    }
+    if (key === 'wants') {
+      return value.map((w) => `<div>${w?.who && index.has(w.who) ? linkId(w.who) : esc(w?.who || '')}：<span class="muted">${esc(w?.want || '')}</span></div>`).join('');
     }
     if (key === 'layers') {
       return value.map((l) => `<div>第 ${l.no} 层：${esc(l.desc)}</div>`).join('');
@@ -1154,6 +1264,11 @@ function bind() {
         renderEpisode();
       }
       openDetail(goto.dataset.goto);
+      return;
+    }
+    if (e.target.closest('[data-scriptmode]')) {
+      state.scriptPlain = !state.scriptPlain;
+      renderEpisode();
       return;
     }
     const hlSel = e.target.closest('[data-hlsel]');

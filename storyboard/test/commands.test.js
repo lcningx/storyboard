@@ -122,3 +122,11 @@ test('new 创建模板文件', (t) => {
   assert.equal(again.status, 2);
   assert.match(again.stderr, /已存在/);
 });
+
+test('script：没有场次时给出提示，--json 合法', () => {
+  const out = run(['script', 'ep01', '--project', 'demo']);
+  assert.match(out, /还没有写场次/);
+  const data = runJson(['script', 'ep01', '--project', 'demo']);
+  assert.equal(data.id, 'ep01');
+  assert.deepEqual(data.scenes, []);
+});
