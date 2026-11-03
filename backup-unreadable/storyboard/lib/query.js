@@ -3,6 +3,7 @@
 import { buildRefs, findEpisode, TYPE_LABEL, UserError } from './load.js';
 import { parseTime, formatTime } from './time.js';
 import { checkProject } from './check.js';
+import { OPEN_STATUS, COMMENT_STATUS, parseTarget, addComment, replyComment, resolveComment } from './comments.js';
 
 const GROUP_DEFS = [
   { type: 'character', label: '角色', key: 'characters' },
@@ -266,6 +267,73 @@ export function cmdScript(project, epArg, sceneId) {
     if (sc.next) lines.push(`→ 下一场  ${sc.next}`);
   }
   return { data: { id: ep.id, scenes }, text: lines.join('\n') };
+}
+
+// ---------- comments ----------
+
+function commentLine(c) {
+  const last = Array.isArray(c.thread) && c.thread.length ? c.thread[c.thread.length - 1] : null;
+  const first = Array.isArray(c.thread) && c.thread.length ? c.thread[0] : null;
+  return `${c.id}  ${c.status}  ${c.target}  「${c.quote || ''}」 · ${first?.text || ''}${last && last !== first ? `（最新 ${last.by}：${last.text}）` : ''}`;
+}
+
+export function cmdComments(project, { status, target } = {}) {
+  let list = Array.isArray(project.comments) ? project.comments : [];
+  if (status) {
+    const wanted = status === '未完成' ? OPEN_STATUS : [status];
+    if (status !== '未完成' && !COMMENT_STATUS.includes(status)) {
+      throw new UserError(`未知状态：${status}（可用 未完成、${COMMENT_STATUS.join('、')}）`);
+    }
+    list = list.filter((c) => wanted.includes(c.status));
+  }
+  if (target) {
+    const ep = findEpisode(project, target);
+    list = list.filter((c) => {
+      const { id } = parseTarget(c.target);
+      if (ep) return id === ep.id || id.startsWith(`${ep.id}.`);
+      return id === target || c.target === target;
+    });
+  }
+  const text = list.length ? list.map(commentLine).join('\n') : '没有评论';
+  return { data: list, text };
+}
+
+function threadText(project, c) {
+  const { id } = parseTarget(c.target);
+  const entry = project.index.get(id);
+  const where = entry ? `${TYPE_LABEL[entry.type] || entry.type}${entry.ep ? ` · ${entry.ep.id}` : ''}` : '（目标已经不在了）';
+  const lines = [
+    `${c.id}  ${c.status}  ${c.target}  ${where}`,
+    `原文  ${c.quote || '—'}`,
+  ];
+  for (const m of Array.isArray(c.thread) ? c.thread : []) lines.push(`${m.at || ''}  ${m.by}：${m.text}`);
+  if (c.resolution) lines.push(`结案  ${c.resolution.status}${c.resolution.note ? ` · ${c.resolution.note}` : ''}`);
+  return lines.join('\n');
+}
+
+export function cmdComment(project, [action, ...rest], { as, note } = {}) {
+  if (!action) throw new UserError('comment 需要评论 ID，或 add / reply / resolve');
+  if (action === 'add') {
+    const [target, ...words] = rest;
+    if (!target || !words.length) throw new UserError('用法：comment add <目标ID[#第几句]> <内容>');
+    const c = addComment(project, { target, text: words.join(' '), by: 'AI' });
+    return { data: c, text: `已添加 ${c.id}\n${threadText(project, c)}` };
+  }
+  if (action === 'reply') {
+    const [id, ...words] = rest;
+    if (!id || !words.length) throw new UserError('用法：comment reply <评论ID> <内容>');
+    const c = replyComment(project, id, { text: words.join(' '), by: 'AI' });
+    return { data: c, text: threadText(project, c) };
+  }
+  if (action === 'resolve') {
+    const [id] = rest;
+    if (!id || !as) throw new UserError('用法：comment resolve <评论ID> --as 采纳|拒绝|解决 [--note <改了什么、为什么>]');
+    const c = resolveComment(project, id, { as, note });
+    return { data: c, text: threadText(project, c) };
+  }
+  const c = (Array.isArray(project.comments) ? project.comments : []).find((x) => x.id === action);
+  if (!c) throw new UserError(`找不到评论：${action}`);
+  return { data: c, text: threadText(project, c) };
 }
 
 // ---------- where ----------

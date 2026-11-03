@@ -31,6 +31,7 @@ node story.js <命令> [参数] [--project <slug>] [--json]
    - 一个高光的铺垫链：`node story.js chain ep01.hl4`
    - 全季概览：`node story.js timeline`
    - 某一集或某一场的剧本（场次、想要、转折、镜头、台词）：`node story.js script ep01 [ep01.sc2]`
+   - 用户在网页上留的评论：`node story.js comments --status 未完成`，看一条：`node story.js comment c3`
 3. **直接编辑对应的 JSON 文件**，不要通过网页改，也不要新建中间文件。
 4. **跑检查并修错误**：
    ```bash
@@ -98,12 +99,26 @@ node story.js check
 - 事件：`kind: "揭示"` 且指向秘密类世界设定时，必须写 `layer`（对应 `layers.no`）。
 - 场次（`scenes`，选填）：每场写 `wants`（谁想要什么）、`turn`（怎么转）、`next`（接下一场的理由），场次覆盖全集；镜头写 `t`、`dur`、`size`、`frame`，台词放在镜头的 `lines` 里，`realizes` 标出它落实了本集哪个高光、铺垫或事件。画面用中文写看得见的东西，不写生成提示词。写了场次的集，每个高光和铺垫都要被某个镜头落实（W121）。
 
+- 镜头要有 `id`（`epNN.shN`），评论靠它落到镜头和台词上；改镜头 ID 前先 `comments --target <集ID>` 看有没有评论指着它。
+
+## 评论
+
+用户在网页上评论，评论存在 `projects/<slug>/comments.json`。**不要手改这个文件**，用命令：
+
+- `comments [--status 未完成] [--target <条目ID或集ID>]`：列出
+- `comment <评论ID>`：看原文和整段对话
+- `comment reply <评论ID> <内容>`：回复（用户在网页上能看到）
+- `comment resolve <评论ID> --as 采纳|拒绝|解决 --note <改了什么、为什么>`：结案
+- `comment add <目标ID[#第几句]> <内容>`：AI 自己发起一条
+
+评论里提的改动，照常出变更单、等用户同意再改数据；改了的条目在决策记录里写 `"comment": "c3"`。
+
 完整字段表直接看 [技术方案.md](技术方案.md) 第 5 节，不要凭记忆猜字段。
 
 ## 不要做的事
 
 - 不要一次性读取或改写整个 `projects/` 目录。
-- 不要修改 `viewer/` 来实现编辑功能——网页按设计只读。
+- 不要修改 `viewer/` 来实现编辑剧情数据的功能——网页对剧情数据只读，能写的只有评论。
 - 不要在 JSON 里复制别的条目内容，只放 ID。
 - 不要为了让检查通过而删掉剧情信息；先判断是数据错还是结构真的有问题。
 - 不要用颜色控制字符或额外日志污染 CLI 输出。

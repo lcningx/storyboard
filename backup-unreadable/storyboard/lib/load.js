@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readComments, COMMENTS_FILE } from './comments.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROJECTS_DIR = path.join(ROOT, 'projects');
@@ -26,6 +27,8 @@ export const TYPE_LABEL = {
   setup: '铺垫',
   event: '事件',
   scene: '场次',
+  shot: '镜头',
+  comment: '评论',
 };
 
 export const TYPE_ORDER = ['project', 'character', 'world', 'thread', 'unit', 'episode'];
@@ -135,6 +138,14 @@ export function loadProjectDir(dir, slug = path.basename(dir)) {
         }
       });
     }
+    // 镜头在场次里面，也登记成条目，评论和 show 都能直接指向它
+    for (const scene of Array.isArray(entry.data.scenes) ? entry.data.scenes : []) {
+      for (const shot of Array.isArray(scene?.shots) ? scene.shots : []) {
+        if (shot && typeof shot === 'object' && !Array.isArray(shot)) {
+          entries.push({ type: 'shot', file: entry.file, ep: entry.data, scene, data: shot, sub: shot, key: 'shots' });
+        }
+      }
+    }
   }
 
   for (const entry of entries) {
@@ -147,6 +158,9 @@ export function loadProjectDir(dir, slug = path.basename(dir)) {
     }
     index.set(id, entry);
   }
+
+  const commentsResult = readComments(dir);
+  if (commentsResult.error) files.push({ file: COMMENTS_FILE, type: 'comment', error: commentsResult.error });
 
   const episodes = entries
     .filter((e) => e.type === 'episode')
@@ -162,6 +176,7 @@ export function loadProjectDir(dir, slug = path.basename(dir)) {
     index,
     duplicates,
     episodes,
+    comments: commentsResult.comments,
     parseErrors: files.filter((f) => f.error),
   };
 }

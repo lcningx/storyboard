@@ -1,6 +1,7 @@
-// 检查规则：E001–E007、W101–W123（W111 已删除）、I201–I211（I212 已删除）。
+// 检查规则：E001–E007、W101–W124（W111 已删除）、I201–I213（I212 已删除）。
 
 import { parseTime, formatTime } from './time.js';
+import { OPEN_STATUS, targetExists } from './comments.js';
 
 const LEVEL_RANK = { error: 0, warn: 1, info: 2 };
 
@@ -669,6 +670,9 @@ export function checkProject(project) {
         .map((shot) => ({ shot, t: parseTime(shot?.t), dur: Number(shot?.dur) }))
         .filter((x) => x.t !== null)
         .sort((a, b) => a.t - b.t);
+      for (const shot of arr(cur.sc.shots)) {
+        if (!filled(shot?.id)) add('E006', 'error', id, `缺少必填字段：镜头 id（${shot?.t ?? '?'}），格式 ${ep.id}.shN`, extra(parseTime(shot?.t) ?? cur.from));
+      }
       shots.forEach((x, j) => {
         const end = Number.isFinite(x.dur) ? x.t + x.dur : x.t;
         if (x.t < cur.from || end > cur.to) {
@@ -712,6 +716,18 @@ export function checkProject(project) {
         add('W120', 'warn', hit.sc.id || epTarget, `「${name}」在全剧第一次出场的这一场，wants 里没有写他想要什么`, extra(first.t));
       }
     }
+  }
+
+  // ---- W124 / I213 评论 ----
+  const comments = arr(project.comments);
+  for (const c of comments) {
+    if (OPEN_STATUS.includes(c.status) && !targetExists(project, c.target)) {
+      add('W124', 'warn', c.id || 'comment', `评论指向的地方已经不在了：${c.target}（原文：${c.quote || '—'}）`);
+    }
+  }
+  const open = comments.filter((c) => OPEN_STATUS.includes(c.status));
+  if (open.length) {
+    add('I213', 'info', meta.id || 'project.json', `有 ${open.length} 条评论没处理完：${open.map((c) => c.id).join('、')}（用 comments 查看）`);
   }
 
   // ---- W107 / W108 / W112 ----

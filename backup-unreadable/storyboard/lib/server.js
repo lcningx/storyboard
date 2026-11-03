@@ -1,4 +1,4 @@
-// 本地只读服务：静态文件 + API + SSE。
+// 本地服务：静态文件 + API + SSE。剧情数据只读；唯一能写的是评论（comments.json）。
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { ROOT, loadProject, loadProjectDir, listProjects, buildRefs, UserError } from './load.js';
 import { checkProject } from './check.js';
+import { addComment, replyComment, resolveComment } from './comments.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -33,6 +34,7 @@ export function projectPayload(project) {
     episodes: project.episodes,
     refs,
     check,
+    comments: project.comments || [],
     parseErrors: project.parseErrors.map((f) => ({ file: f.file, message: f.error })),
   };
 }
@@ -77,6 +79,9 @@ export function startServer({ port = 4173, host = '0.0.0.0' } = {}) {
       return sendText(res, 400, 'bad request');
     }
 
+    if (req.method === 'POST' && url.pathname.startsWith('/api/comments')) {
+      return handleComment(req, res, url);
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendText(res, 405, 'method not allowed');
     }
@@ -142,6 +147,41 @@ export function startServer({ port = 4173, host = '0.0.0.0' } = {}) {
 
     return sendText(res, 404, 'not found');
   });
+
+  // 评论：网页上只有用户一个人在写。新建、回复、自己关掉；采纳和拒绝由 AI 在 CLI 里做。
+  function handleComment(req, res, url) {
+    let body = '';
+    let tooLarge = false;
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 64 * 1024) tooLarge = true;
+    });
+    req.on('end', () => {
+      if (tooLarge) return sendJson(res, 413, { error: '内容太长' });
+      let input;
+      try {
+        input = JSON.parse(body || '{}');
+      } catch {
+        return sendJson(res, 400, { error: '请求不是合法的 JSON' });
+      }
+      try {
+        const project = loadProject(url.searchParams.get('project') || input.project);
+        let comment;
+        if (url.pathname === '/api/comments') {
+          comment = addComment(project, { target: input.target, text: input.text, by: '用户' });
+        } else if (url.pathname === '/api/comments/reply') {
+          comment = replyComment(project, input.id, { text: input.text, by: '用户' });
+        } else if (url.pathname === '/api/comments/close') {
+          comment = resolveComment(project, input.id, { as: '解决', note: input.text || '用户关闭', by: '用户' });
+        } else {
+          return sendJson(res, 404, { error: 'not found' });
+        }
+        return sendJson(res, 200, comment);
+      } catch (err) {
+        return sendJson(res, err instanceof UserError ? 400 : 500, { error: err.message });
+      }
+    });
+  }
 
   // SSE：监听项目目录，防抖 200ms 后推 change；解析失败时推 error。
   function openStream(req, res, requested) {

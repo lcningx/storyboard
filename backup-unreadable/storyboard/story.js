@@ -2,7 +2,7 @@
 // storyboard 唯一入口：CLI 命令 + serve。
 
 import { loadProject, UserError } from './lib/load.js';
-import { cmdIndex, cmdShow, cmdEp, cmdScript, cmdWhere, cmdChain, cmdTimeline, cmdCheck } from './lib/query.js';
+import { cmdIndex, cmdShow, cmdEp, cmdScript, cmdComments, cmdComment, cmdWhere, cmdChain, cmdTimeline, cmdCheck } from './lib/query.js';
 
 const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--json]
 
@@ -12,6 +12,13 @@ const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--js
   ep <集ID或集号> [--from <t>] [--to <t>] [--only <字段,...>]
                                         输出一集；可限定时间段和字段（如 --only highlights,setups）
   script <集ID或集号> [<场次ID>]        按剧本格式输出一集或一场：场次、想要、转折、镜头和台词
+  comments [--status 未完成|<状态>] [--target <条目ID或集ID>]
+                                        列出评论（状态：待处理、讨论中、已采纳、已拒绝、已解决）
+  comment <评论ID>                      看一条评论的原文和整段对话
+  comment add <目标ID[#第几句]> <内容>  以 AI 的身份发起一条评论
+  comment reply <评论ID> <内容>         以 AI 的身份回复
+  comment resolve <评论ID> --as 采纳|拒绝|解决 [--note <改了什么、为什么>]
+                                        结案
   where <id>                            某个条目在哪些集、什么时间被引用
   chain <高光ID>                        高光的铺垫链，标注所在集和相隔多久
   timeline [<集ID>]                     全季概览；带集 ID 时输出该集按时间排好的条目
@@ -23,7 +30,7 @@ const USAGE = `用法：node story.js <命令> [参数] [--project <slug>] [--js
 
 时间格式为 m:ss。"--json" 输出结构化数据。`;
 
-const VALUE_FLAGS = new Set(['project', 'type', 'from', 'to', 'only', 'level', 'port', 'host']);
+const VALUE_FLAGS = new Set(['project', 'type', 'from', 'to', 'only', 'level', 'port', 'host', 'status', 'target', 'as', 'note']);
 
 function parseArgs(argv) {
   const flags = {};
@@ -100,6 +107,12 @@ async function main() {
     case 'script':
       if (!rest[0]) throw new UserError('script 需要一个集 ID 或集号，例如 ep01');
       print(cmdScript(project, rest[0], rest[1]), flags.json);
+      break;
+    case 'comments':
+      print(cmdComments(project, flags), flags.json);
+      break;
+    case 'comment':
+      print(cmdComment(project, rest, flags), flags.json);
       break;
     case 'where':
       if (!rest[0]) throw new UserError('where 需要一个条目 ID');

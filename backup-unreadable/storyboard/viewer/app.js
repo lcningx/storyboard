@@ -14,6 +14,9 @@ const state = {
   selHl: null,
   data: null,
   scriptPlain: false,
+  commentTarget: null, // 详情面板里新评论要挂到哪：条目 ID，或 镜头ID#第几句
+  commentFilter: 'open',
+  drafts: {}, // 还没提交的评论草稿，数据刷新时不丢
 };
 const index = new Map();
 const unitColor = new Map();
@@ -30,6 +33,7 @@ const TYPE_LABELS = {
   setup: '铺垫',
   event: '事件',
   scene: '场次',
+  shot: '镜头',
 };
 
 // 颜色：每一类东西一套固定的颜色，在 style.css 里定义成变量
@@ -147,7 +151,12 @@ function buildIndex() {
     for (const hl of arr(ep.highlights)) index.set(hl.id, { type: 'highlight', data: hl, ep });
     for (const su of arr(ep.setups)) index.set(su.id, { type: 'setup', data: su, ep });
     for (const ev of arr(ep.events)) index.set(ev.id, { type: 'event', data: ev, ep });
-    for (const sc of arr(ep.scenes)) index.set(sc.id, { type: 'scene', data: { ...sc, name: sc.place }, ep });
+    for (const sc of arr(ep.scenes)) {
+      index.set(sc.id, { type: 'scene', data: { ...sc, name: sc.place }, ep });
+      for (const shot of arr(sc.shots)) {
+        if (shot.id) index.set(shot.id, { type: 'shot', data: { ...shot, name: `${shot.t} ${shot.size || ''}`, summary: shot.frame }, ep });
+      }
+    }
   }
 }
 
@@ -216,8 +225,8 @@ function applyHash() {
   if (hash.startsWith('ep/')) {
     state.view = 'episode';
     state.ep = hash.slice(3) || null;
-  } else if (hash === 'library') {
-    state.view = 'library';
+  } else if (hash === 'library' || hash === 'comments') {
+    state.view = hash;
   } else {
     state.view = 'season';
   }
@@ -234,6 +243,7 @@ function renderAll() {
   renderIssues();
   if (state.view === 'season') renderSeason();
   else if (state.view === 'episode') renderEpisode();
+  else if (state.view === 'comments') renderComments();
   else renderLibrary();
   setHash();
   if (state.detail) renderDetail();
@@ -246,6 +256,8 @@ function renderTop() {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.view === state.view);
   }
+  const open = openComments().length;
+  $('#comment-count').textContent = open ? ` ${open}` : '';
 }
 
 function renderIssues() {
@@ -917,6 +929,7 @@ function shotPanel(ep, shot) {
   const vo = lines.filter((l) => l.kind === 'VO');
   const spoken = lines.filter((l) => l.kind !== 'VO');
   const goto = realized[0]?.data.id;
+  const lineNo = (l) => lines.indexOf(l) + 1;
   const star = hls.length
     ? `<span class="shot-star" style="--c:${hlColor((climax || hls[0]).data)}">${climax ? '◆' : '★'} ${esc(hls.map((h) => h.data.name).join('、'))}</span>`
     : '';
@@ -924,12 +937,12 @@ function shotPanel(ep, shot) {
     <div class="shot-emo" title="情绪 ${emo === null ? '—' : emo.toFixed(1)}"><i style="width:${emo === null ? 0 : emo * 10}%"></i></div>
     <div class="shot-frame">
       <div class="shot-head"><b>${esc(shot.size || '?')}</b>${shot.move && shot.move !== '固定' ? `<span>${MOVE_ARROW[shot.move] || ''}${esc(shot.move)}</span>` : ''}${pinned ? '<span class="shot-pin" title="落实了铺垫">📌</span>' : ''}${star}</div>
-      ${vo.map((l) => `<div class="caption" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))} · VO</small>${esc(l.text)}</div>`).join('')}
+      ${vo.map((l) => `<div class="caption" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))} · VO${cmtButton(`${shot.id}#${lineNo(l)}`, true)}</small>${esc(l.text)}</div>`).join('')}
       <p class="shot-text">${esc(shot.frame || '')}</p>
-      ${spoken.map((l) => `<div class="bubble${l.kind === '画外' ? ' off' : ''}" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))}${l.kind === '画外' ? ' · 画外' : ''}</small>${esc(l.text)}</div>`).join('')}
+      ${spoken.map((l) => `<div class="bubble${l.kind === '画外' ? ' off' : ''}" style="--c:${whoColor(l.who)}"><small>${esc(whoName(l.who))}${l.kind === '画外' ? ' · 画外' : ''}${cmtButton(`${shot.id}#${lineNo(l)}`, true)}</small>${esc(l.text)}</div>`).join('')}
       ${shot.sound ? `<div class="shot-sound">♪ ${esc(shot.sound)}</div>` : ''}
     </div>
-    <div class="shot-foot">${esc(shot.t || '')} · ${dur} 秒</div>
+    <div class="shot-foot">${esc(shot.t || '')} · ${dur} 秒${shot.id ? cmtButton(shot.id) : ''}</div>
   </div>`;
 }
 
@@ -960,7 +973,7 @@ function renderBoard(ep) {
       const wants = arr(sc.wants).map((w) => `<div class="want" style="--c:${whoColor(w.who)}"><b>${esc(whoName(w.who))}</b>${esc(w.want)}</div>`).join('');
       return `<article class="scene">
         <header class="scene-card" data-goto="${esc(sc.id)}">
-          <div class="scene-title"><span class="scene-no">第 ${i + 1} 场</span><b>${esc(sc.place || '')}</b><span class="muted">${esc(sc.from)}–${esc(sc.to)}</span></div>
+          <div class="scene-title"><span class="scene-no">第 ${i + 1} 场</span><b>${esc(sc.place || '')}</b><span class="muted">${esc(sc.from)}–${esc(sc.to)}</span>${cmtButton(sc.id)}</div>
           ${wants ? `<div class="wants">${wants}</div>` : ''}
           ${sc.turn ? `<div class="turn"><span>转</span>${esc(sc.turn)}</div>` : ''}
           ${issues}
@@ -974,6 +987,110 @@ function renderBoard(ep) {
     <div class="panel-head"><h3>分镜</h3><span class="hint">像翻漫画一样读：气泡是台词，方框是 VO，★ 是高光，📌 是铺垫；点格子看它落实了什么</span>${toggle}</div>
     ${body}
   </section>`;
+}
+
+// ---------- 评论 ----------
+// 网页上只有用户在写：新建、回复、自己关掉。AI 在 CLI 里读、讨论、结案。
+
+const OPEN = ['待处理', '讨论中'];
+const STATUS_COLOR = { 待处理: 'var(--danger)', 讨论中: 'var(--warn)', 已采纳: 'var(--h-fun)', 已拒绝: 'var(--muted)', 已解决: 'var(--muted)' };
+
+function allComments() {
+  return arr(state.data?.comments);
+}
+
+function openComments() {
+  return allComments().filter((c) => OPEN.includes(c.status));
+}
+
+function baseOf(target) {
+  return String(target || '').split('#')[0];
+}
+
+// 某个目标上的评论；镜头的话，连它的每一句台词一起算
+function commentsOn(target, withLines = false) {
+  return allComments().filter((c) => c.target === target || (withLines && baseOf(c.target) === target && c.target.includes('#')));
+}
+
+function cmtButton(target, small = false) {
+  const open = commentsOn(target).filter((c) => OPEN.includes(c.status)).length;
+  return `<button class="cmt${small ? ' small' : ''}${open ? ' has' : ''}" data-cmt="${esc(target)}" title="评论">💬${open ? ` ${open}` : ''}</button>`;
+}
+
+function targetLabel(target) {
+  const [id, line] = String(target).split('#');
+  const entry = getEntry(id);
+  const base = entry ? `${TYPE_LABELS[entry.type] || ''} ${entry.data.name || id}` : id;
+  return line ? `${base} 第 ${line} 句` : base;
+}
+
+function draftBox(key, placeholder, button, data) {
+  return `<div class="cmt-form"><textarea data-draft="${esc(key)}" placeholder="${esc(placeholder)}">${esc(state.drafts[key] || '')}</textarea>
+    <button class="mini primary" ${data}>${button}</button></div>`;
+}
+
+function commentCard(c, { showTarget = false } = {}) {
+  const thread = arr(c.thread)
+    .map((m) => `<div class="msg ${m.by === 'AI' ? 'ai' : 'me'}"><small>${m.by === 'AI' ? 'AI' : '我'} · ${esc(m.at || '')}</small><p>${esc(m.text)}</p></div>`)
+    .join('');
+  const open = OPEN.includes(c.status);
+  return `<div class="cmt-card" style="--c:${STATUS_COLOR[c.status] || 'var(--muted)'}">
+    <div class="cmt-head"><b>${esc(c.id)}</b><span class="cmt-status">${esc(c.status)}</span>
+      ${showTarget ? `<button class="mini" data-cmt="${esc(c.target)}">${esc(targetLabel(c.target))}</button>` : ''}</div>
+    ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : ''}
+    ${thread}
+    ${draftBox(`reply:${c.id}`, open ? '接着说…' : '还有话要说？回复会重新打开它', '回复', `data-cmt-reply="${esc(c.id)}"`)}
+    ${open ? `<button class="mini" data-cmt-close="${esc(c.id)}">我这边没问题了，关掉</button>` : ''}
+  </div>`;
+}
+
+// 详情面板底部：这个条目上的评论 + 写新评论
+function commentBlock(entry) {
+  const id = entry.data.id;
+  const list = commentsOn(id, entry.type === 'shot');
+  const lines = entry.type === 'shot' ? arr(entry.data.lines) : [];
+  const target = state.commentTarget && baseOf(state.commentTarget) === id ? state.commentTarget : id;
+  const choices = lines.length
+    ? `<div class="cmt-choose">评论：<button class="mini${target === id ? ' active' : ''}" data-cmt="${esc(id)}">整个镜头</button>${lines
+        .map((l, i) => `<button class="mini${target === `${id}#${i + 1}` ? ' active' : ''}" data-cmt="${esc(`${id}#${i + 1}`)}">第 ${i + 1} 句：${esc(whoName(l.who))}「${esc(String(l.text).slice(0, 12))}${String(l.text).length > 12 ? '…' : ''}」</button>`)
+        .join('')}</div>`
+    : '';
+  return `<h3 id="cmt-anchor">评论（${list.length}）</h3>
+    ${list.map((c) => commentCard(c, { showTarget: c.target !== id })).join('')}
+    ${choices}
+    ${draftBox(`new:${target}`, `对「${targetLabel(target)}」说点什么…`, '发表评论', `data-cmt-new="${esc(target)}"`)}`;
+}
+
+function renderComments() {
+  const list = state.commentFilter === 'open' ? openComments() : allComments();
+  const sorted = list.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const filter = ['open', 'all']
+    .map((f) => `<button class="mini${state.commentFilter === f ? ' active' : ''}" data-cmt-filter="${f}">${f === 'open' ? `没处理完（${openComments().length}）` : `全部（${allComments().length}）`}</button>`)
+    .join('');
+  view.innerHTML = `<section class="panel">
+    <div class="panel-head"><h3>评论</h3><div class="legend">${filter}</div><span class="hint">在分镜、台词或任何详情面板里点 💬 留评论；回到对话里说"处理评论"，AI 会一条条和你讨论</span></div>
+    ${sorted.length ? sorted.map((c) => commentCard(c, { showTarget: true })).join('') : '<p class="muted">还没有评论。</p>'}
+  </section>`;
+}
+
+async function postComment(path, body) {
+  const res = await fetch(`/api/comments${path}?project=${encodeURIComponent(state.project)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `提交失败：${res.status}`);
+  await loadData();
+  renderAll();
+}
+
+function openCommentTarget(target) {
+  const id = baseOf(target);
+  if (!index.has(id)) return;
+  state.commentTarget = target;
+  openDetail(id);
+  setTimeout(() => $('#cmt-anchor')?.scrollIntoView({ block: 'start' }), 0);
 }
 
 // ---------- 资料 ----------
@@ -1068,6 +1185,7 @@ const DETAIL_FIELDS = {
   setup: [['t', '时间'], ['kind', '类型'], ['longTerm', '长线伏笔']],
   event: [['t', '时间'], ['ref', '指向'], ['kind', '动作'], ['layer', '揭示层次'], ['infoGap', '信息差'], ['channel', '投放渠道']],
   scene: [['from', '开始'], ['to', '结束'], ['wants', '谁想要什么'], ['turn', '怎么转'], ['next', '接下一场的理由']],
+  shot: [['t', '开始'], ['dur', '秒数'], ['size', '景别'], ['move', '运镜'], ['frame', '画面'], ['lines', '台词'], ['sound', '音效'], ['realizes', '落实了']],
 };
 
 function linkId(id) {
@@ -1086,7 +1204,7 @@ function formatValue(key, value) {
     if (!value.length) return '—';
     if (key === 'growth') return value.map((g) => tag(g, 'var(--ink-soft)')).join('');
     if (key === 'episodes') return value.map(chipEp).join(' ');
-    if (['setups', 'refs'].includes(key)) return value.map(linkId).join(' ');
+    if (['setups', 'refs', 'realizes'].includes(key)) return value.map(linkId).join(' ');
     if (value.every((v) => typeof v === 'string')) return value.map((v) => esc(v)).join('、');
     if (key === 'relations') {
       return value.map((r) => `<div>${esc(r.kind)}：${linkId(r.to)} <span class="muted">${esc(r.desc)}</span></div>`).join('');
@@ -1096,6 +1214,9 @@ function formatValue(key, value) {
     }
     if (key === 'circle') {
       return value.map((c) => `<div>${c?.who && index.has(c.who) ? linkId(c.who) : esc(c?.who || '')}：<span class="muted">${esc(c?.desc || '')}</span></div>`).join('');
+    }
+    if (key === 'lines') {
+      return value.map((l, i) => `<div>${i + 1}. <b>${esc(whoName(l.who))}</b>${l.kind && l.kind !== '对白' ? `（${esc(l.kind)}）` : ''}：${esc(l.text)}</div>`).join('');
     }
     if (key === 'wants') {
       return value.map((w) => `<div>${w?.who && index.has(w.who) ? linkId(w.who) : esc(w?.who || '')}：<span class="muted">${esc(w?.want || '')}</span></div>`).join('');
@@ -1172,7 +1293,8 @@ function renderDetail() {
     <div class="fields">${rows}</div>
     ${renderNotes(data.notes)}
     <h3>被引用</h3>
-    ${refList}`;
+    ${refList}
+    ${commentBlock(entry)}`;
   detail.hidden = false;
 }
 
@@ -1184,6 +1306,7 @@ function openDetail(id) {
 
 function closeDetail() {
   state.detail = null;
+  state.commentTarget = null;
   detail.hidden = true;
 }
 
@@ -1242,6 +1365,43 @@ function setView(name) {
 function bind() {
   document.addEventListener('click', (e) => {
     if (e.target.closest('summary')) return; // 展开决策记录，不打开详情
+    if (e.target.closest('textarea')) return;
+    const cmt = e.target.closest('[data-cmt]');
+    if (cmt) {
+      e.stopPropagation();
+      openCommentTarget(cmt.dataset.cmt);
+      return;
+    }
+    const send = e.target.closest('[data-cmt-new], [data-cmt-reply], [data-cmt-close]');
+    if (send) {
+      const { cmtNew, cmtReply, cmtClose } = send.dataset;
+      const key = cmtNew ? `new:${cmtNew}` : cmtReply ? `reply:${cmtReply}` : null;
+      const text = key ? (state.drafts[key] || '').trim() : '';
+      if (key && !text) return;
+      const req = cmtNew
+        ? postComment('', { target: cmtNew, text })
+        : cmtReply
+          ? postComment('/reply', { id: cmtReply, text })
+          : postComment('/close', { id: cmtClose });
+      send.disabled = true;
+      req
+        .then(() => {
+          if (key) delete state.drafts[key];
+          if (state.detail) renderDetail();
+          else if (state.view === 'comments') renderComments();
+        })
+        .catch((err) => showBanner(err.message))
+        .finally(() => {
+          send.disabled = false;
+        });
+      return;
+    }
+    const cmtFilter = e.target.closest('[data-cmt-filter]');
+    if (cmtFilter) {
+      state.commentFilter = cmtFilter.dataset.cmtFilter;
+      renderComments();
+      return;
+    }
     const close = e.target.closest('[data-close]');
     if (close) {
       closeDetail();
@@ -1314,8 +1474,14 @@ function bind() {
     if (hot && !hot.contains(e.relatedTarget)) setHot(hot.dataset.row || hot.dataset.mk, false);
   });
 
+  document.addEventListener('input', (e) => {
+    const box = e.target.closest?.('[data-draft]');
+    if (box) state.drafts[box.dataset.draft] = box.value;
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (e.target.closest?.('textarea')) return; // 正在写评论时 Esc 不关面板
     if (state.detail) closeDetail();
     else if (state.selHl) {
       state.selHl = null;

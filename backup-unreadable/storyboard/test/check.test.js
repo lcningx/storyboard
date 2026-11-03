@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadProjectDir } from '../lib/load.js';
 import { checkProject } from '../lib/check.js';
+import { addComment, replyComment, resolveComment } from '../lib/comments.js';
 
 function baseFiles() {
   return {
@@ -608,8 +609,8 @@ function withScenes(files) {
       turn: '他发现了规则',
       next: '所以他追了上去',
       shots: [
-        { t: '0:00', dur: 10, size: '全景', move: '推', frame: '街口', lines: [{ who: 'char.hero', text: '人呢？' }] },
-        { t: '0:10', dur: 20, size: '特写', frame: '地上的痕迹', realizes: ['ep01.su1'] },
+        { id: 'ep01.sh1', t: '0:00', dur: 10, size: '全景', move: '推', frame: '街口', lines: [{ who: 'char.hero', text: '人呢？' }] },
+        { id: 'ep01.sh2', t: '0:10', dur: 20, size: '特写', frame: '地上的痕迹', realizes: ['ep01.su1'] },
       ],
     },
     {
@@ -619,7 +620,7 @@ function withScenes(files) {
       place: '屋顶 · 外 · 夜',
       wants: [{ who: 'char.guest', want: '再见母亲一面' }],
       turn: '他出手了',
-      shots: [{ t: '0:30', dur: 30, size: '中景', frame: '屋顶上的对决', lines: [{ who: '路人', text: '快看！', kind: '画外' }], realizes: ['ep01.hl1'] }],
+      shots: [{ id: 'ep01.sh3', t: '0:30', dur: 30, size: '中景', frame: '屋顶上的对决', lines: [{ who: '路人', text: '快看！', kind: '画外' }], realizes: ['ep01.hl1'] }],
     },
   ];
 }
@@ -711,4 +712,60 @@ test('W113 景别、运镜、台词类型的枚举', (t) => {
     withScenes(files);
     files['episodes/ep01.json'].scenes[0].shots[0].size = '大特写';
   });
+});
+
+test('E006 镜头缺少 id', (t) => {
+  assertHas(t, 'E006', (files) => {
+    withScenes(files);
+    delete files['episodes/ep01.json'].scenes[0].shots[0].id;
+  });
+});
+
+// ---- 评论 ----
+
+function projectWithScenes(t) {
+  const files = baseFiles();
+  withScenes(files);
+  const dir = writeProject(files);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return { dir, load: () => loadProjectDir(dir, 'test') };
+}
+
+test('评论：新建、回复、结案，用户再回复会重新打开', (t) => {
+  const { load } = projectWithScenes(t);
+  const c = addComment(load(), { target: 'ep01.sh1#1', text: '这句不像他' });
+  assert.equal(c.id, 'c1');
+  assert.equal(c.status, '待处理');
+  assert.match(c.quote, /人呢/);
+  assert.equal(replyComment(load(), 'c1', { text: '同意，改成……', by: 'AI' }).status, '讨论中');
+  assert.equal(resolveComment(load(), 'c1', { as: '采纳', note: '改了台词' }).status, '已采纳');
+  assert.equal(replyComment(load(), 'c1', { text: '还有一点', by: '用户' }).status, '讨论中');
+  assert.equal(addComment(load(), { target: 'ep01.sc2', text: '第二条' }).id, 'c2');
+});
+
+test('评论：目标不存在、台词序号越界时拒绝', (t) => {
+  const { load } = projectWithScenes(t);
+  assert.throws(() => addComment(load(), { target: 'ep01.sh99', text: 'x' }), /目标不存在/);
+  assert.throws(() => addComment(load(), { target: 'ep01.sh1#5', text: 'x' }), /目标不存在/);
+  assert.throws(() => addComment(load(), { target: 'ep01.sh1', text: '  ' }), /不能为空/);
+  assert.throws(() => resolveComment(load(), 'c9', { as: '采纳' }), /找不到评论/);
+});
+
+test('I213 有没处理完的评论；W124 评论指向的地方不在了', (t) => {
+  const { dir, load } = projectWithScenes(t);
+  addComment(load(), { target: 'ep01.sh2', text: '看看' });
+  let codes = checkProject(load()).issues.map((i) => i.code);
+  assert.ok(codes.includes('I213'));
+  assert.ok(!codes.includes('W124'));
+  // 镜头改了 ID，评论就指空了
+  const epFile = path.join(dir, 'episodes/ep01.json');
+  const ep = JSON.parse(fs.readFileSync(epFile, 'utf8'));
+  ep.scenes[0].shots[1].id = 'ep01.sh9';
+  fs.writeFileSync(epFile, JSON.stringify(ep));
+  codes = checkProject(load()).issues.map((i) => i.code);
+  assert.ok(codes.includes('W124'));
+  // 结了案的评论不再报
+  resolveComment(load(), 'c1', { as: '解决' });
+  codes = checkProject(load()).issues.map((i) => i.code);
+  assert.ok(!codes.includes('W124') && !codes.includes('I213'));
 });

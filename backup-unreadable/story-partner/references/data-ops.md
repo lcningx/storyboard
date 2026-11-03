@@ -19,6 +19,23 @@
 - 不要用 `cat`、`ls -R` 之类把整个项目读一遍。
 - 要改一个文件之前，先用 Read 读这个文件，只读这一个。
 
+## 评论
+
+评论存在 `projects/<slug>/comments.json`，**不要手改**，只用命令：
+
+| 想做 | 命令 |
+|---|---|
+| 列出没处理完的评论 | `node storyboard/story.js comments --status 未完成 --project <slug>` |
+| 某一集或某个条目上的评论 | `node storyboard/story.js comments --target ep01 --project <slug>` |
+| 看一条评论的原文和对话 | `node storyboard/story.js comment c3 --project <slug>` |
+| 回复（用户在网页上能看到） | `node storyboard/story.js comment reply c3 <内容> --project <slug>` |
+| 结案 | `node storyboard/story.js comment resolve c3 --as 采纳\|拒绝\|解决 --note <改了什么、为什么> --project <slug>` |
+| 自己发起一条 | `node storyboard/story.js comment add ep01.sh9#1 <内容> --project <slug>` |
+
+- 评论的目标是条目 ID；指向某一句台词时写 `镜头ID#第几句`。
+- 改镜头 ID 或删条目前，先看有没有没处理完的评论指着它；指空了 `check` 会报 W124。
+- 处理流程见 SKILL.md 的"处理评论"。
+
 ## 变更单
 
 讨论有了结论以后、写入之前，先给用户看变更单：
@@ -104,6 +121,7 @@
 | `why` | 是 | 为什么。用户只说了"就这样"、没给理由时，写"用户决定"，不要替他编理由 |
 | `rejected` | 否 | 讨论中考虑过、被否掉的方案，以及原因 |
 | `risk` | 否 | 你提过、用户仍决定接受的风险 |
+| `comment` | 否 | 这次改动来自哪条评论，比如 `"c3"` |
 
 规则：
 

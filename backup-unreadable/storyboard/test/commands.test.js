@@ -130,3 +130,9 @@ test('script：没有场次时给出提示，--json 合法', () => {
   assert.equal(data.id, 'ep01');
   assert.deepEqual(data.scenes, []);
 });
+
+test('comments：没有评论时给出提示，未知状态报错', () => {
+  assert.match(run(['comments']), /没有评论/);
+  const r = spawnSync(process.execPath, [STORY, 'comments', '--status', '不存在', '--project', 'demo'], { cwd: ROOT, encoding: 'utf8' });
+  assert.equal(r.status, 2);
+});
